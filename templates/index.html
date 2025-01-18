@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Voice Chat Agent</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #status {
+            text-align: center;
+            margin: 10px 0;
+            color: #666;
+        }
+
+        .transcript {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        #user-input {
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .response-type-toggle {
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .listening {
+            background-color: #ff4444;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Voice Chat Agent</h1>
+    <div id="status">Status: Not Connected</div>
+
+    <div class="response-type-toggle">
+        <label>
+            <input type="radio" name="responseType" value="text" checked> Text Response
+        </label>
+        <label>
+            <input type="radio" name="responseType" value="audio"> Audio Response
+        </label>
+    </div>
+
+    <div class="transcript">
+        <h3>Conversation:</h3>
+        <div id="conversation"></div>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="user-input" placeholder="Type your message...">
+        <button onclick="startListening()">
+            <i class="fas fa-microphone"></i>
+        </button>
+        <button onclick="sendTextMessage()">Send</button>
+    </div>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+    <script>
+        let ws;
+        let isConnected = false;
+        let recognition = null;
+
+        function connectWebSocket() {
+            ws = new WebSocket('ws://localhost:8000/ws');
+
+            ws.onopen = () => {
+                document.getElementById('status').textContent = 'Status: Connected';
+                isConnected = true;
+            };
+
+            ws.onclose = () => {
+                document.getElementById('status').textContent = 'Status: Disconnected';
+                isConnected = false;
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onmessage = async (event) => {
+                try {
+                    if (event.data instanceof Blob) {
+                        // Handle audio response
+                        const audioUrl = URL.createObjectURL(event.data);
+                        const audio = new Audio(audioUrl);
+                        await audio.play();
+                    } else {
+                        // Handle text response
+                        const data = JSON.parse(event.data);
+                        if (data.error) {
+                            updateConversation(`Error: ${data.error}`, false);
+                        } else if (data.response) {
+                            updateConversation(data.response, false);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error handling message:', e);
+                    updateConversation('Error processing response', false);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket Error:', error);
+                document.getElementById('status').textContent = 'Status: Error - Check console';
+            };
+        }
+
+        function sendTextMessage() {
+            const input = document.getElementById('user-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const responseType = document.querySelector('input[name="responseType"]:checked').value;
+
+            // Update conversation with user's message
+            updateConversation(message, true);
+
+            // Clear input field
+            input.value = '';
+
+            // Send message through WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const payload = {
+                    message: message,
+                    responseType: responseType
+                };
+                console.log('Sending message:', payload);
+                ws.send(JSON.stringify(payload));
+            } else {
+                console.error('WebSocket not connected');
+                updateConversation('Error: WebSocket not connected', false);
+            }
+        }
+
+        function initSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window) {
+                recognition = new webkitSpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+
+                recognition.onresult = function (event) {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('user-input').value = transcript;
+                    // Optionally auto-send the message
+                    sendTextMessage();
+                };
+
+                recognition.onerror = function (event) {
+                    console.error('Speech recognition error:', event.error);
+                    document.getElementById('status').textContent = 'Status: Speech recognition error';
+                };
+
+                recognition.onend = function () {
+                    document.getElementById('status').textContent = isConnected ? 'Status: Connected' : 'Status: Disconnected';
+                };
+            } else {
+                console.log('Speech recognition not supported');
+                const micButton = document.querySelector('button[onclick="startListening()"]');
+                micButton.disabled = true;
+                micButton.title = 'Speech recognition not supported in this browser';
+            }
+        }
+
+        function startListening() {
+            if (recognition) {
+                const micButton = document.querySelector('button[onclick="startListening()"]');
+                micButton.classList.add('listening');
+
+                recognition.onend = function () {
+                    micButton.classList.remove('listening');
+                    document.getElementById('status').textContent = isConnected ? 'Status: Connected' : 'Status: Disconnected';
+                };
+
+                document.getElementById('status').textContent = 'Status: Listening...';
+                recognition.start();
+            }
+        }
+
+        async function initializeApp() {
+            // Check microphone permission
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop()); // Stop the test stream
+            } catch (error) {
+                console.error('Microphone permission error:', error);
+                document.getElementById('status').textContent = 'Status: Microphone permission denied';
+                return;
+            }
+
+            // Initialize speech recognition
+            initSpeechRecognition();
+
+            // Connect WebSocket
+            connectWebSocket();
+        }
+
+        function updateConversation(text, isUser = true) {
+            const conversation = document.getElementById('conversation');
+            const message = document.createElement('p');
+            message.textContent = `${isUser ? 'You' : 'Assistant'}: ${text}`;
+            conversation.appendChild(message);
+            conversation.scrollTop = conversation.scrollHeight;
+        }
+
+        // Initialize the app when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeApp();
+
+            // Add event listener for Enter key in the input field
+            document.getElementById('user-input').addEventListener('keypress', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    sendTextMessage();
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
