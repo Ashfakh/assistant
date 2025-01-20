@@ -22,3 +22,6 @@ INSTALLED_APPS = [
 # Required Django settings
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'your-secret-key-here')
 MIDDLEWARE = [] 
+
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+DEEPGRAM_API_KEY = os.getenv('DEEPGRAM_API_KEY')

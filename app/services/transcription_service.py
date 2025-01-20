@@ -1,6 +1,5 @@
 from deepgram import Deepgram
-from ..config import settings
-
+from app.django_orm import settings
 class TranscriptionService:
     def __init__(self):
         self.deepgram = Deepgram(settings.DEEPGRAM_API_KEY)

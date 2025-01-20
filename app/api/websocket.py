@@ -1,21 +1,28 @@
 from fastapi import WebSocket, WebSocketDisconnect, Depends
 import uuid
 import json
-from services.transcription_service import TranscriptionService
-from services.chat_service import ChatService
-from services.audio_service import AudioService
+from app.actor.coordinator_actor import CoordinatorActor
+from app.dto.coordinator import CoordinatorMemory
+from app.dto.session import QueryDTO, SessionDTO
+from app.services.transcription_service import TranscriptionService
+from app.services.chat_service import ChatService
+from app.services.audio_service import AudioService
 
 class WebSocketManager:
     def __init__(self):
         self.transcription_service = TranscriptionService()
-        self.chat_service = ChatService()
         self.audio_service = AudioService()
+        self.coordinator_actor = None
+        self.session_dto = None
 
     async def handle_websocket(self, websocket: WebSocket):
         print("New WebSocket connection attempt")
         await websocket.accept()
         session_id = str(uuid.uuid4())
+        self.session_dto = SessionDTO(id=session_id)
         print(f"WebSocket connected: {session_id}")
+
+        self.coordinator_actor = CoordinatorActor(initial_memory=CoordinatorMemory(active_actor="assistant"))
 
         try:
             while True:
@@ -91,7 +98,7 @@ class WebSocketManager:
         try:
             # Get chat response
             print(f"Getting chat response for: {message}")
-            response = await self.chat_service.get_chat_response(message, session_id)
+            response = await self.coordinator_actor.ask(QueryDTO(message=message, session_dto=self.session_dto))
             print(f"Chat response received: {response}")
 
             if response_type == "audio":

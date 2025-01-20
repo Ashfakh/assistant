@@ -47,7 +47,7 @@ class Actor(Generic[T], ABC):
         pass
 
     @abstractmethod
-    async def on_receive(self, message: Any):
+    async def _on_receive(self, message: Any):
         """
         Handle incoming messages and orchestrate tasks.
         Must be implemented by concrete actors.
@@ -68,7 +68,7 @@ class Actor(Generic[T], ABC):
         Returns:
             Any: The result from on_receive
         """
-        return await self.on_receive(message)
+        return await self._on_receive(message)
 
     def tell(self, message: Any):
         """
@@ -77,7 +77,7 @@ class Actor(Generic[T], ABC):
         Args:
             message: The message to be processed
         """
-        asyncio.create_task(self.on_receive(message))
+        asyncio.create_task(self._on_receive(message))
 
     def get_memory(self) -> T:
         """
