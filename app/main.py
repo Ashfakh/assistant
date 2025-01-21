@@ -1,12 +1,22 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.staticfiles import StaticFiles
+import os
+from fastapi import FastAPI, WebSocket, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+import django
+from django.conf import settings
 
 # Import Django models
-from app.django_orm.models import Conversation, Message
 from app.api.websocket import WebSocketManager
+
+# Configure Django settings
+def configure_django():
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app.core.settings')
+    if not settings.configured:
+        django.setup()
+
+# Initialize Django
+configure_django()
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
