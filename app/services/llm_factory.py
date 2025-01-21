@@ -1,7 +1,7 @@
 from typing import List, Union
 
 from django.db import models
-from app.django_orm import settings
+from app.core import settings
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
@@ -26,7 +26,7 @@ class LLMFactory:
     ):
         if llm_provider == LLMProvider.OPENAI:
             return ChatOpenAI(
-                api_key=settings.OPEN_AI_API_KEY,
+                api_key=settings.OPENAI_API_KEY,
                 model=model_name,
                 temperature=temperature,
                 max_retries=max_retries,

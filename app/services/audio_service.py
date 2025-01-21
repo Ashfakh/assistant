@@ -1,5 +1,5 @@
 from openai import AsyncOpenAI
-from app.django_orm import settings
+from app.core import settings
 class AudioService:
     def __init__(self):
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)

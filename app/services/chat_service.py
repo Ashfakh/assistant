@@ -1,15 +1,13 @@
-from app.django_orm import settings
+from app.services.llm_factory import LLMFactory, LLMProvider
 from ..dto.chat import ChatMessage
-from sqlalchemy.orm import Session
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage, BaseMessage, AIMessage
 
 class ChatService:
     def __init__(self):
-        self.chat = ChatOpenAI(
-            model="gpt-4",
-            openai_api_key=settings.OPENAI_API_KEY,
-            temperature=0.7
+        self.llm = LLMFactory.get_chat_llm(
+            llm_provider=LLMProvider.OPENAI,
+            model_name="gpt-4o",
         )
 
     async def get_chat_response(self, message: str, chat_history: list[ChatMessage]) -> str:
@@ -20,7 +18,7 @@ class ChatService:
         messages.extend(self.create_messages(chat_history))
         messages.append(HumanMessage(content=message))
         
-        response = await self.chat.ainvoke(messages)
+        response = await self.llm.ainvoke(messages)
         assistant_message = response.content
         
         return assistant_message 
