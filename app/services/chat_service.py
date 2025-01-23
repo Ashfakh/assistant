@@ -1,6 +1,5 @@
 from app.services.llm_factory import LLMFactory, LLMProvider
 from ..dto.chat import ChatMessage
-from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage, BaseMessage, AIMessage
 
 class ChatService:

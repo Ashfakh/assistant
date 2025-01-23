@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Voice Chat Agent</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .circle {
+            width: 150px;
+            height: 150px;
+            background-color: #f0f0f0;
+            border-radius: 50%;
+            margin: 50px auto;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .bars {
+            display: flex;
+            gap: 5px;
+        }
+
+        .bar {
+            width: 10px;
+            height: 20px;
+            background-color: #3498db;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                height: 20px;
+            }
+
+            50% {
+                height: 50px;
+            }
+        }
+
+        .listening .bar {
+            animation: amplitude 0.3s infinite;
+        }
+
+        @keyframes amplitude {
+
+            0%,
+            100% {
+                height: 20px;
+            }
+
+            50% {
+                height: 100px;
+            }
+        }
+
+        #status {
+            color: #666;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Voice Chat Agent</h1>
+    <div id="status">Status: Not Connected</div>
+
+    <div class="circle" id="circle">
+        <div class="bars">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let recognition;
+        const circle = document.getElementById('circle');
+        const status = document.getElementById('status');
+
+        function connectWebSocket() {
+            ws = new WebSocket('ws://localhost:8000/ws');
+
+            ws.onopen = () => {
+                status.textContent = 'Status: Connected';
+            };
+
+            ws.onclose = () => {
+                status.textContent = 'Status: Disconnected';
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onmessage = async (event) => {
+                if (event.data instanceof Blob) {
+                    const audioUrl = URL.createObjectURL(event.data);
+                    const audio = new Audio(audioUrl);
+                    circle.classList.add('listening');
+                    await audio.play();
+                    circle.classList.remove('listening');
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket Error:', error);
+                status.textContent = 'Status: Error - Check console';
+            };
+        }
+
+        function initSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window) {
+                recognition = new webkitSpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+
+                const transcriptDiv = document.createElement('div');
+                transcriptDiv.id = 'transcript';
+                transcriptDiv.style.margin = '20px';
+                transcriptDiv.style.padding = '10px';
+                transcriptDiv.style.border = '1px solid #ddd';
+                transcriptDiv.style.borderRadius = '5px';
+                document.body.insertBefore(transcriptDiv, circle);
+
+                recognition.onresult = function (event) {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                            console.log('Final transcript:', transcript);
+                            sendMessage(transcript);
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+
+                    transcriptDiv.innerHTML = `
+                        <div style="color: #666;">${interimTranscript}</div>
+                        <div style="color: #000;">${finalTranscript}</div>
+                    `;
+                };
+
+                recognition.onerror = function (event) {
+                    console.error('Speech recognition error:', event.error);
+                    status.textContent = 'Status: Speech recognition error';
+                };
+
+                recognition.onend = function () {
+                    console.log('Recognition ended');
+                    recognition.start();
+                    status.textContent = 'Status: Listening';
+                };
+            } else {
+                console.log('Speech recognition not supported');
+                status.textContent = 'Speech recognition not supported in this browser';
+            }
+        }
+
+        function startListening() {
+            if (recognition) {
+                circle.classList.add('listening');
+                status.textContent = 'Status: Listening...';
+                recognition.start();
+            }
+        }
+
+        function sendMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const payload = { message: message, responseType: 'audio' };
+                console.log('Sending message:', payload);
+                ws.send(JSON.stringify(payload));
+            } else {
+                console.error('WebSocket not connected');
+                status.textContent = 'Status: WebSocket not connected';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            connectWebSocket();
+            initSpeechRecognition();
+
+            circle.addEventListener('click', startListening);
+        });
+    </script>
+</body>
+
+</html>

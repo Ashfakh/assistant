@@ -2,5 +2,5 @@ from dataclasses import dataclass
 
 
 @dataclass
-class AssistantMemory:
+class SchedulerMemory:
     current_state: str = "GenericQuery"
