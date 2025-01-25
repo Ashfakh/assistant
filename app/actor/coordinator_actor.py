@@ -4,7 +4,7 @@ from app.actor.assistant_actor import AssistantActor
 from app.dto.assistant import AssistantMemory
 from app.dto.chat import ChatMessage
 from app.dto.coordinator import CoordinatorMemory
-from app.dto.session import QueryDTO
+from app.dto.session import QueryDTO, ResponseDTO
 
 
 class CoordinatorActor(Actor):
@@ -14,9 +14,9 @@ class CoordinatorActor(Actor):
     
     async def _on_receive(self, query_dto: QueryDTO):
         if self.memory.active_actor == "assistant":
-            response = await self.assistant_actor.ask(query_dto)
+            response: ResponseDTO = await self.assistant_actor.ask(query_dto)
             query_dto.session_dto.chat_history.append(ChatMessage(role="user", content=query_dto.message))
-            query_dto.session_dto.chat_history.append(ChatMessage(role="assistant", content=response))
+            query_dto.session_dto.chat_history.append(ChatMessage(role="assistant", content=response.response))
             return response
         
 

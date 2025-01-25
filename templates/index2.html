@@ -33,6 +33,23 @@
             gap: 30px;
             height: 50vh;
             margin: auto 0;
+            transition: all 0.3s ease;
+        }
+
+        .wave-container.with-artifact {
+            position: fixed;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            height: auto;
+            margin: 0;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .wave-container.with-artifact .wave-bar {
+            width: 20px;
+            height: 100px;
         }
 
         .wave-bar {
@@ -86,6 +103,80 @@
             background-color: #cccccc;
             cursor: not-allowed;
         }
+
+        #inputContainer {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            width: 60%;
+            max-width: 800px;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        #inputContainer.with-artifact {
+            left: 20px !important;
+            transform: none !important;
+            width: 300px !important;
+            max-width: 300px !important;
+        }
+
+        #textInput {
+            flex-grow: 1;
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1em;
+        }
+
+        #responseContainer {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s ease;
+            width: 60%;
+            z-index: 1000;
+        }
+
+        #responseContainer.with-artifact {
+            left: 20px !important;
+            transform: none !important;
+            width: 300px !important;
+            max-width: 300px !important;
+        }
+
+        #textResponse {
+            color: white;
+            padding: 15px;
+            max-width: 300px;
+            text-align: left;
+            font-size: 1.1em;
+        }
+
+        #artifactContainer {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 80%;
+            max-height: 80vh;
+        }
+
+        #artifactContainer img,
+        #artifactContainer video {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+        }
     </style>
 </head>
 
@@ -99,6 +190,8 @@
     </div>
     <button id="startButton">Start Listening</button>
     <div id="transcript"></div>
+    <div id="inputContainer"></div>
+    <div id="responseContainer"></div>
 
     <script>
         let ws;
@@ -174,13 +267,59 @@
 
                     await audio.play();
                 } else {
-                    // Handle text response
+                    // Handle text/artifact response
                     try {
                         const data = JSON.parse(event.data);
                         if (data.error) {
                             console.error('Error:', data.error);
                         } else if (data.response) {
-                            console.log('Response:', data.response);
+                            const responseContainer = document.getElementById('responseContainer');
+                            const inputContainer = document.getElementById('inputContainer');
+                            const waveContainer = document.querySelector('.wave-container');
+                            responseContainer.innerHTML = ''; // Clear previous response
+
+                            // Create text response element
+                            const textResponse = document.createElement('div');
+                            textResponse.id = 'textResponse';
+                            textResponse.textContent = data.response;
+
+                            if (data.artifact_url) {
+                                // Add classes to move containers to left
+                                inputContainer.classList.add('with-artifact');
+                                responseContainer.classList.add('with-artifact');
+                                waveContainer.classList.add('with-artifact');
+
+                                // Create and position artifact in center
+                                const artifactContainer = document.createElement('div');
+                                artifactContainer.id = 'artifactContainer';
+
+                                if (data.artifact_type === 'image') {
+                                    const img = document.createElement('img');
+                                    img.src = data.artifact_url;
+                                    artifactContainer.appendChild(img);
+                                } else if (data.artifact_type === 'video') {
+                                    const video = document.createElement('video');
+                                    video.src = data.artifact_url;
+                                    video.controls = true;
+                                    artifactContainer.appendChild(video);
+                                }
+
+                                document.body.appendChild(artifactContainer);
+                                responseContainer.appendChild(textResponse);
+                            } else {
+                                // Reset to default centered layout
+                                inputContainer.classList.remove('with-artifact');
+                                responseContainer.classList.remove('with-artifact');
+                                waveContainer.classList.remove('with-artifact');
+                                responseContainer.appendChild(textResponse);
+                                textResponse.style.maxWidth = '100%';
+
+                                // Remove any existing artifact
+                                const existingArtifact = document.getElementById('artifactContainer');
+                                if (existingArtifact) {
+                                    existingArtifact.remove();
+                                }
+                            }
                         }
                     } catch (e) {
                         console.error('Error parsing message:', e);

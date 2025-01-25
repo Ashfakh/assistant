@@ -110,7 +110,9 @@ class WebSocketManager:
                 audio_response = await self.audio_service.text_to_speech(response.response)
                 print(f"Audio response generated: {len(audio_response)} bytes")
                 await websocket.send_bytes(audio_response)
-                await websocket.send_text(json.dumps({"response": response.response, "artifact_url": response.artifact_url, "artifact_type": response.artifact_type}))
+                await websocket.send_text(json.dumps({"response": response.response, 
+                                                      "artifact_url": response.artifact_url, 
+                                                      "artifact_type": response.artifact_type}))
             else:
                 # Send text response
                 print("Sending text response...")
