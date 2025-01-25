@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #F5F5F5;
+            /* Off-White background */
+            color: #343A40;
+            /* Charcoal for main text */
+        }
+
+        .dashboard-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background-color: #2A4C7D;
+            color: #F5F5F5;
+            padding: 20px;
+        }
+
+        .sidebar h2 {
+            margin-bottom: 20px;
+        }
+
+        .nav-item {
+            padding: 10px;
+            cursor: pointer;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+        }
+
+        .nav-item:hover {
+            background-color: #FF6B6B;
+            /* Warm Coral */
+            color: white;
+        }
+
+        .nav-item.active {
+            background-color: #FF6B6B;
+            /* Warm Coral */
+            color: white;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            background-color: #F5F5F5;
+            /* Off-White */
+        }
+
+        .reminder-card {
+            border: 1px solid #6C757D;
+            /* Soft Gray border */
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .reminder-card h3 {
+            margin-top: 0;
+            color: #2A4C7D;
+            /* Soft Navy Blue */
+        }
+
+        .reminder-card p {
+            color: #343A40;
+            /* Charcoal */
+        }
+
+        .reminder-card strong {
+            color: #88B04B;
+            /* Fresh Sage Green */
+        }
+
+        .mood-container {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .mood-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .mood-metrics {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-bar {
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar div {
+            height: 100%;
+            background: #88B04B;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <h2>Dashboard</h2>
+            <div class="nav-item" onclick="showSection('reminders')">Reminders</div>
+            <div class="nav-item" onclick="showSection('mood')">Dad's Mood</div>
+            <div class="nav-item">Settings</div>
+            <div class="nav-item">Profile</div>
+        </div>
+        <div class="main-content">
+            <div id="reminders-section">
+                <h1>Reminders</h1>
+                <div id="reminders-container">
+                    <!-- Reminders will be loaded here -->
+                </div>
+            </div>
+            <div id="mood-section" style="display: none;">
+                <h1>Dad's Mood Today</h1>
+                <div class="mood-container">
+                    <div class="mood-card">
+                        <h3>Overall Mood</h3>
+                        <div id="overall-mood"></div>
+                    </div>
+                    <div class="mood-card">
+                        <h3>Energy Level</h3>
+                        <div class="progress-bar" id="energy-level"></div>
+                    </div>
+                    <div class="mood-metrics">
+                        <div class="metric-card">
+                            <h3>Emotional State</h3>
+                            <canvas id="emotional-chart"></canvas>
+                        </div>
+                        <div class="metric-card">
+                            <h3>Physical State</h3>
+                            <canvas id="physical-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="mood-card">
+                        <h3>Activities</h3>
+                        <div id="activities-list"></div>
+                    </div>
+                    <div class="mood-card">
+                        <h3>Notes</h3>
+                        <p id="mood-notes"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        async function loadReminders() {
+            try {
+                const response = await fetch('/api/reminders');
+                const data = await response.json();
+                const container = document.getElementById('reminders-container');
+
+                container.innerHTML = data.reminders.map(reminder => `
+                    <div class="reminder-card">
+                        <h3>${reminder.title}</h3>
+                        <p>${reminder.description}</p>
+                        <p><strong>Due Date:</strong> ${reminder.due_date}</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading reminders:', error);
+            }
+        }
+
+        async function loadMoodData() {
+            try {
+                const response = await fetch('/api/mood');
+                const data = await response.json();
+                displayMoodData(data);
+            } catch (error) {
+                console.error('Error loading mood data:', error);
+            }
+        }
+
+        function displayMoodData(data) {
+            // Overall mood emoji
+            const moodEmojis = {
+                'good': '😊',
+                'neutral': '😐',
+                'bad': '☹️'
+            };
+            document.getElementById('overall-mood').innerHTML = `
+                <h1 style="text-align: center">${moodEmojis[data.overall_mood]}</h1>
+                <p style="text-align: center">${data.overall_mood.toUpperCase()}</p>
+            `;
+
+            // Energy level
+            document.getElementById('energy-level').innerHTML = `
+                <div style="width: ${data.energy_level * 10}%; background: #88B04B;"></div>
+            `;
+
+            // Emotional state chart
+            const emotionalCtx = document.getElementById('emotional-chart').getContext('2d');
+            new Chart(emotionalCtx, {
+                type: 'radar',
+                data: {
+                    labels: Object.keys(data.emotional_state),
+                    datasets: [{
+                        data: Object.values(data.emotional_state),
+                        backgroundColor: 'rgba(42, 76, 125, 0.2)',
+                        borderColor: '#2A4C7D',
+                        pointBackgroundColor: '#2A4C7D'
+                    }]
+                },
+                options: {
+                    scale: {
+                        ticks: { beginAtZero: true, max: 10 }
+                    }
+                }
+            });
+
+            // Physical state chart
+            const physicalCtx = document.getElementById('physical-chart').getContext('2d');
+            new Chart(physicalCtx, {
+                type: 'radar',
+                data: {
+                    labels: Object.keys(data.physical_state),
+                    datasets: [{
+                        data: Object.values(data.physical_state),
+                        backgroundColor: 'rgba(136, 176, 75, 0.2)',
+                        borderColor: '#88B04B',
+                        pointBackgroundColor: '#88B04B'
+                    }]
+                },
+                options: {
+                    scale: {
+                        ticks: { beginAtZero: true, max: 10 }
+                    }
+                }
+            });
+
+            // Activities
+            document.getElementById('activities-list').innerHTML = data.activities
+                .map(activity => `<span class="badge">${activity}</span>`)
+                .join(' ');
+
+            // Notes
+            document.getElementById('mood-notes').textContent = data.notes;
+        }
+
+        function showSection(section) {
+            // Hide all sections
+            document.getElementById('reminders-section').style.display = 'none';
+            document.getElementById('mood-section').style.display = 'none';
+
+            // Show selected section
+            document.getElementById(`${section}-section`).style.display = 'block';
+
+            // Update active nav item
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Load data for the section
+            if (section === 'reminders') {
+                loadReminders();
+            } else if (section === 'mood') {
+                loadMoodData();
+            }
+        }
+
+        // Load reminders by default
+        document.addEventListener('DOMContentLoaded', () => {
+            loadReminders();
+            document.querySelector('.nav-item').classList.add('active');
+        });
+    </script>
+</body>
+
+</html>

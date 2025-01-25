@@ -21,7 +21,7 @@ class WebSocketManager:
         if not self.session_dto:
             self.session_dto = SessionDTO(
                 id=session_id, 
-                active_user=UserType.DAD,  # or UserType.SON depending on your needs
+                active_user=UserType(role),  # or UserType.SON depending on your needs
                 language=language
             )
         print(f"WebSocket connected: {session_id}")

@@ -14,18 +14,35 @@ from asgiref.sync import sync_to_async
 
 logger = structlog.get_logger(__name__)
 
+
 scheduler_prompt = """
-You are a scheduler for an assistant. You need to create a scheduled reminder for the user. 
-You need to identify the schedule time, schedule type and the schedule message who the reminder is for. The schedule can be for the user itself or his Son or Dad.
-If you are not able to identify any of the required fields, Your user type is {user_type}.
-you need to ask the user to provide the missing information one by one, Keep asking for the required information until you get all the information.
-you can ask the user by setting message to the user. If all the information is available, set message to None.
-Schedule type can be one of the following:
-Recurring - The reminder is a recurring reminder.
-One Time - The reminder is a one time reminder.
-Other information:
-timestamp : {timestamp}
-"""
+        You are Vaani's scheduler assistant. You help set reminders and manage schedules.
+        IMPORTANT: Understand that "tom" means "tomorrow" in user messages.
+        You need to identify the schedule time, schedule type and the schedule message who the reminder is for. 
+        The schedule can be for the user itself or his Son or Dad.
+        If you are not able to identify any of the required fields, you need to ask the user to provide the missing information.
+        you can ask the user by setting message to the user. 
+        If all the information is available, set message to None.
+
+        Your user type is {user_type}.
+
+        Schedule type can be one of the following:
+        Recurring - The reminder is a recurring reminder.
+        One Time - The reminder is a one time reminder.
+        Other information:
+        timestamp : {timestamp}
+        
+        Current Context:
+        - Sugar test is due today
+        - Medicine Schedule: 2 PM and 7 PM
+        - Rohit is planning to visit today
+        
+        When setting reminders:
+        1. Always confirm the date (today/tomorrow)
+        2. Ask for specific time if not provided
+        3. Ask for reminder details if not clear
+        4. Be proactive about health-related reminders
+        """
 
 class SchedulerState(BaseModel):
     user_type: Optional[str] = None
@@ -44,7 +61,7 @@ class SchedulerActor(Actor):
             model_name="gpt-4o",
         ).with_structured_output(SchedulerState)
 
-    async def _on_receive(self, query_dto: QueryDTO):
+    async def _on_receive(self, query_dto: QueryDTO):        
         messages = []
         messages.append(SystemMessage(content=scheduler_prompt.format(user_type=query_dto.session_dto.active_user, timestamp=datetime.now().isoformat())))
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
@@ -54,7 +71,7 @@ class SchedulerActor(Actor):
             return scheduler_state.message
         else:
             await self.handle_scheduler(scheduler_state, query_dto)
-            return "Thanks for using Vaani. Have a great day!, Your Scheduled reminder is set"
+            return None
         
     async def handle_scheduler(self, scheduler_state: SchedulerState, query_dto: QueryDTO):
         logger.info("Scheduler State", scheduler_state=scheduler_state)

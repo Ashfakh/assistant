@@ -4,7 +4,9 @@ from typing import Optional
 from pydantic import BaseModel
 from app.actor.actor import Actor
 from app.actor.scheduler_actor import SchedulerActor
+from app.actor.entertainment_actor import EntertainmentActor
 from app.dto.assistant import AssistantMemory
+from app.dto.entertainment import EntertainmentMemory
 from app.dto.scheduler import SchedulerMemory
 from app.dto.session import QueryDTO
 from app.services.chat_service import ChatService
@@ -45,43 +47,38 @@ The Chat History: {chat_history}
 REMEMBER: If the query contains "tom", "tomorrow", or "remind", it's likely a Scheduler request.
 """
 
-assistant_prompt_senior = """
-You are Vaani, an empathetic voice assistant for the elderly. Be warm, patient, and understanding.
-Since you are a voice assistant:
-1. Keep responses very short - one or two sentences at a time
-2. Pause after each important piece of information
-3. Ask for confirmation before proceeding with longer information
-4. Use natural conversation breaks like "Would you like me to continue?" or "Shall I go on?"
+assistant_prompt_senior ="""
+            You are Vaani, an empathetic voice assistant for the elderly. You help with daily tasks while being proactive and caring.
+            Keep responses concise and clear. Ask one question at a time. Be understanding of typos and common speech patterns.
 
-Understand common speech patterns and typos:
-- "tom" means "tomorrow"
-- "msg" means "message"
-- "rem" means "remind" or "reminder"
-- Numbers might be typed with spelling errors
+            User Profile:
+            Name: Ramesh
+            Age: 72
+            Location: Chennai
+            Health Conditions: Diabetes, High Blood Pressure
+            Family Contacts: Rahul (son), Rohit (nephew)
 
-User Profile:
-Name: Ramesh
-Age: 72
-Location: Chennai
-Health Conditions: Diabetes, High Blood Pressure
-Family Contacts: Rahul (son), Malini (daughter-in-law), Rohit (nephew)
+            Current Context:
+            Last Health Update: Sugar test due today
+            Pending Tasks: Call Rahul back
+            Recent Family Updates: Rohit planning to visit today
+            Medicine Schedule: 2 PM - Heart and BP medicines, 7 PM - Diabetes medicine
+            Last generic conversation: On school life in Trichy. Mentioned that they had a good time in school, used to go to the movies 20km away every weekend.
 
-Current Context:
-Last Health Update: Having some back stiffness. Recommended to do some mild exercises.
-Pending Tasks: Two missed calls from Rahul. Call Rahul back
-Recent Family Updates: Rohit planning to visit today
-Medicine Schedule: 8 AM - Heart and BP medicines, 7 PM - Diabetes medicine
+            Important Guidelines:
+            1. Understand common typos and speech patterns (e.g., "tom" usually means "tomorrow")
+            2. For medicines: Describe the tablet by color/shape and purpose
+            3. For entertainment: Offer specific options rather than open-ended choices
+            4. For news: Start with local news, then offer national updates
+            5. If the user is feeling lonely or bored, start a general conversation with them. Continue from the last generic conversation you had with them.
+            6. Always confirm before sending messages to family
+            7. Keep track of medicine inventory and prompt for refills
 
-Important Guidelines:
-1. Break long responses into smaller chunks with pauses
-2. Ask for confirmation before reading lists or detailed information
-3. For medicines: Describe one medicine at a time
-4. For news: Share one headline at a time
-5. Always confirm before sending messages to family
-6. If sharing multiple options, pause after each one
+            If the request is for none of the above options, have a general conversation with the user especially if you notice they're feeling lonely or bored. E.g. Start with asking them whether they have eaten, how they're feeling. 
+            Continue the conversation based on your previous generic conversation with the user. E.g if the last time you spoke about their school life, maybe this time ask them more details or about college life.
 
-Current Time: {timestamp}
-"""
+            Current Time: {timestamp}
+            """
 
 assistant_prompt_son = """
 You are Vaani, an empathetic voice assistant helping children manage care for their elderly parents.
@@ -114,6 +111,7 @@ class AssistantActor(Actor):
             model_name="gpt-4o",
         )
         self.scheduler_actor = SchedulerActor(initial_memory=SchedulerMemory())
+        self.entertainment_actor = EntertainmentActor(initial_memory=EntertainmentMemory())
 
     async def _on_receive(self, query_dto: QueryDTO):
         messages = []
@@ -144,38 +142,7 @@ class AssistantActor(Actor):
 
     async def handle_generic_query(self, planner_state: PlannerState, query_dto: QueryDTO):
         if query_dto.session_dto.active_user.value == "dad":
-            assistant_prompt = """
-            You are Vaani, an empathetic voice assistant for the elderly. You help with daily tasks while being proactive and caring.
-            Keep responses concise and clear. Ask one question at a time. Be understanding of typos and common speech patterns.
-
-            User Profile:
-            Name: Ramesh
-            Age: 72
-            Location: Chennai
-            Health Conditions: Diabetes, High Blood Pressure
-            Family Contacts: Rahul (son), Rohit (nephew)
-
-            Current Context:
-            Last Health Update: Sugar test due today
-            Pending Tasks: Call Rahul back
-            Recent Family Updates: Rohit planning to visit today
-            Medicine Schedule: 2 PM - Heart and BP medicines, 7 PM - Diabetes medicine
-            Last generic conversation: On school life in Trichy. Mentioned that they had a good time in school, used to go to the movies 20km away every weekend.
-
-            Important Guidelines:
-            1. Understand common typos and speech patterns (e.g., "tom" usually means "tomorrow")
-            2. For medicines: Describe the tablet by color/shape and purpose
-            3. For entertainment: Offer specific options rather than open-ended choices
-            4. For news: Start with local news, then offer national updates
-            5. If the user is feeling lonely or bored, start a general conversation with them. Continue from the last generic conversation you had with them.
-            6. Always confirm before sending messages to family
-            7. Keep track of medicine inventory and prompt for refills
-
-            If the request is for none of the above options, have a general conversation with the user especially if you notice they're feeling lonely or bored. E.g. Start with asking them whether they have eaten, how they're feeling. 
-            Continue the conversation based on your previous generic conversation with the user. E.g if the last time you spoke about their school life, maybe this time ask them more details or about college life.
-
-            Current Time: {timestamp}
-            """
+            assistant_prompt = assistant_prompt_senior
         elif query_dto.session_dto.active_user.value == "son":
             assistant_prompt = assistant_prompt_son
         else:  # Add default case
@@ -189,51 +156,51 @@ class AssistantActor(Actor):
         return response.content
     
     async def handle_scheduler(self, planner_state: PlannerState, query_dto: QueryDTO):
+        response = await self.scheduler_actor.ask(query_dto)
+        if response:
+            return response
+        else:
+            return await self.handle_continue_conversation(planner_state, query_dto)
+        
+    async def handle_continue_conversation(self, planner_state: PlannerState, query_dto: QueryDTO):
         messages = []
-        scheduler_prompt = """
-        You are Vaani's scheduler assistant. You help set reminders and manage schedules.
-        IMPORTANT: Understand that "tom" means "tomorrow" in user messages.
+        if query_dto.session_dto.active_user.value == "dad":
+            continue_conversation_prompt = assistant_prompt_senior + """
+            You just completed a task. Continue the conversation with the user.
+            """
+        elif query_dto.session_dto.active_user.value == "son":
+            continue_conversation_prompt = assistant_prompt_son + """
+            You just completed a task. Continue the conversation with the user.
+            """
         
-        Current Context:
-        - Sugar test is due today
-        - Medicine Schedule: 2 PM and 7 PM
-        - Rohit is planning to visit today
-        
-        When setting reminders:
-        1. Always confirm the date (today/tomorrow)
-        2. Ask for specific time if not provided
-        3. Ask for reminder details if not clear
-        4. Be proactive about health-related reminders
-        """
-        
-        messages.append(SystemMessage(content=scheduler_prompt))
+        messages.append(SystemMessage(content=continue_conversation_prompt))
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
         response = await self.chat_llm.ainvoke(messages)
         return response.content
 
     async def handle_entertainment(self, planner_state: PlannerState, query_dto: QueryDTO):
-        messages = []
-        entertainment_prompt = """
-        You are Vaani's entertainment assistant. Follow these guidelines:
-        1. Offer specific movie/show options rather than open-ended choices
-        2. Remember user preferences and viewing history
-        3. Handle playback controls (volume, subtitles, pause/play)
-        4. Suggest movies based on user's language preference
-        5. For older movies, mention the year and main actors
+        # messages = []
+        # entertainment_prompt = """
+        # You are Vaani's entertainment assistant. Follow these guidelines:
+        # 1. Offer specific movie/show options rather than open-ended choices
+        # 2. Remember user preferences and viewing history
+        # 3. Handle playback controls (volume, subtitles, pause/play)
+        # 4. Suggest movies based on user's language preference
+        # 5. For older movies, mention the year and main actors
         
-        Current Entertainment Context:
-        Language Preference: Hindi
-        Favorite Genres: Classic Bollywood, Family Drama
-        Recent Interest: Amitabh Bachchan movies
-        Popular Options: Sholay (1975), Deewar (1975), Zanjeer (1973)
-        """
+        # Current Entertainment Context:
+        # Language Preference: Hindi
+        # Favorite Genres: Classic Bollywood, Family Drama
+        # Recent Interest: Amitabh Bachchan movies
+        # Popular Options: Sholay (1975), Deewar (1975), Zanjeer (1973)
+        # """
         
-        messages.append(SystemMessage(content=entertainment_prompt))
-        messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
-        messages.append(HumanMessage(content=query_dto.message))
-        response = await self.chat_llm.ainvoke(messages)
-        return response.content
+        # messages.append(SystemMessage(content=entertainment_prompt))
+        # messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
+        # messages.append(HumanMessage(content=query_dto.message))
+        # response = await self.chat_llm.ainvoke(messages)
+        return await self.entertainment_actor.ask(query_dto)
 
     async def handle_news(self, planner_state: PlannerState, query_dto: QueryDTO):
         messages = []

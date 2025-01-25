@@ -23,9 +23,7 @@ from IPython import display
 from playwright.async_api import async_playwright
 
 from langgraph.graph import END, START, StateGraph
-import structlog
 
-logger = structlog.get_logger(__name__)
 
 class BBox(TypedDict):
     x: float
@@ -334,19 +332,27 @@ class WebBrowse:
         pass
 
     async def browse(self, query: str, website: str):
-        logger.info(f"Browsing the web for {query} on {website}")
+        parser = argparse.ArgumentParser(description='Web browsing agent')
+        parser.add_argument('--query', type=str, default=query,
+                      help='The query to send to the agent')
+        parser.add_argument('--headless', action='store_true',
+                      help='Run browser in headless mode')
+        parser.add_argument('--user-data-dir', type=str, 
+                      default=str(Path.home() / '.playwright-profile'),
+                      help='Directory for persistent browser profile')
+        args = parser.parse_args()
 
         browser = await async_playwright().start()
         try:
         # Use persistent context instead of launching a new browser instance
             context = await browser.chromium.launch_persistent_context(
-            user_data_dir=str(Path.home() / '.playwright-profile'),
-            headless=False,
+            user_data_dir=args.user_data_dir,
+            headless=args.headless,
         )
             page = await context.new_page()
             await page.goto(website)
 
-            result = await call_agent(query, page)
+            result = await call_agent(args.query, page)
             print("\nFinal Answer:", result)
         except Exception as e:
             print(f"An error occurred: {e}")

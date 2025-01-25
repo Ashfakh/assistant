@@ -6,83 +6,122 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
+            max-width: 800px;
+            margin: 0 auto;
             padding: 20px;
             text-align: center;
-            background-color: black;
-            color: white;
-            min-height: 100vh;
+        }
+
+        .circle {
+            width: 150px;
+            height: 150px;
+            background-color: #f0f0f0;
+            border-radius: 50%;
+            margin: 50px auto;
+            position: relative;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .bars {
+            display: flex;
+            gap: 5px;
+        }
+
+        .bar {
+            width: 10px;
+            height: 20px;
+            background-color: #3498db;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                height: 20px;
+            }
+
+            50% {
+                height: 50px;
+            }
+        }
+
+        .listening .bar {
+            animation: amplitude 0.3s infinite;
+        }
+
+        @keyframes amplitude {
+
+            0%,
+            100% {
+                height: 20px;
+            }
+
+            50% {
+                height: 100px;
+            }
         }
 
         #status {
-            color: white;
+            color: #666;
             margin-top: 10px;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 10px;
         }
 
         .wave-container {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 30px;
-            /* Increased gap between bars */
-            height: 50vh;
-            /* Takes up half the viewport height */
-            margin: auto 0;
-            /* Centers vertically */
+            gap: 3px;
+            height: 100px;
+            margin: 20px 0;
         }
 
         .wave-bar {
-            width: 30px;
-            /* Doubled width from 15px */
-            height: 160px;
-            /* Quadrupled height from 40px */
-            background: #FF69B4;
-            /* Changed to hot pink */
-            border-radius: 8px;
-            /* Slightly increased radius to match new size */
+            width: 4px;
+            height: 20px;
+            background: #3498db;
+            border-radius: 3px;
             animation: none;
         }
 
-        #transcript {
-            color: white;
-            margin: 20px auto;
-            padding: 10px;
-            font-size: 1.2em;
-            position: fixed;
-            bottom: 50px;
-            left: 0;
-            right: 0;
-        }
+        @keyframes wave {
+            0% {
+                height: 10px;
+            }
 
-        /* Remove unused styles */
-        .circle,
-        .bars,
-        .bar {
-            display: none;
+            50% {
+                height: 100px;
+            }
+
+            100% {
+                height: 10px;
+            }
         }
     </style>
 </head>
 
 <body>
+    <h1>Voice Chat Agent</h1>
     <div id="status">Status: Not Connected</div>
-    <div class="wave-container">
-        <div class="wave-bar"></div>
-        <div class="wave-bar"></div>
-        <div class="wave-bar"></div>
-        <div class="wave-bar"></div>
+
+    <div class="circle" id="circle">
+        <div class="bars">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+        </div>
     </div>
-    <div id="transcript"></div>
 
     <script>
         let ws;
         let recognition;
+        const circle = document.getElementById('circle');
+        const status = document.getElementById('status');
 
         function connectWebSocket() {
             // Generate a random session ID if not already stored
@@ -100,13 +139,11 @@
             ws = new WebSocket(`ws://localhost:8000/ws?session_id=${sessionId}&role=${role}`);
 
             ws.onopen = () => {
-                document.getElementById('status').textContent = `Status: Connected (${role})`;
-                console.log('WebSocket connected');
+                status.textContent = `Status: Connected (${role})`;
             };
 
             ws.onclose = () => {
-                document.getElementById('status').textContent = 'Status: Disconnected';
-                console.log('WebSocket disconnected, attempting to reconnect...');
+                status.textContent = 'Status: Disconnected';
                 setTimeout(connectWebSocket, 3000);
             };
 
@@ -148,7 +185,9 @@
                         updatePlaybackWaveform();
                     });
 
+                    circle.classList.add('listening');
                     await audio.play();
+                    circle.classList.remove('listening');
                 } else {
                     // Handle text response
                     try {
@@ -166,7 +205,7 @@
 
             ws.onerror = (error) => {
                 console.error('WebSocket Error:', error);
-                document.getElementById('status').textContent = 'Status: Error - Check console';
+                status.textContent = 'Status: Error - Check console';
             };
         }
 
@@ -174,8 +213,8 @@
             const waveContainer = document.createElement('div');
             waveContainer.className = 'wave-container';
 
-            // Create exactly 4 bars
-            for (let i = 0; i < 4; i++) {
+            // Create 40 bars for a fuller waveform
+            for (let i = 0; i < 40; i++) {
                 const bar = document.createElement('div');
                 bar.className = 'wave-bar';
                 waveContainer.appendChild(bar);
@@ -186,52 +225,17 @@
 
         function animateWaveform(volume) {
             const bars = document.querySelectorAll('.wave-bar');
-            const baseHeight = 60;
-            const maxHeight = 400;
-
-            const amplifiedVolume = Math.min(255, volume * 2.5);
-            const waveHeight = Math.min(maxHeight, (amplifiedVolume / 255) * maxHeight);
-
             bars.forEach((bar, index) => {
-                const time = Date.now() / 200;
-                const offset = index * (Math.PI / 2);
-                const waveMultiplier = Math.sin(time + offset);
+                // Increased height scaling
+                const height = Math.min(100, (volume / 255) * 100);  // Increased max height to 100px
+                bar.style.height = `${10 + height}px`;  // Increased base height
 
-                const finalHeight = baseHeight + (waveHeight * (0.5 + (waveMultiplier * 0.5)));
-
-                const heightPercentage = (finalHeight - baseHeight) / (maxHeight - baseHeight);
-                const pink1 = [255, 220, 230];  // Changed to slightly darker light pink
-                const pink2 = [255, 182, 193];  // Light pink #FFB6C1
-                const pink3 = [255, 105, 180];  // Hot pink #FF69B4
-                const pink4 = [219, 112, 147];  // Pale violet red #DB7093
-                const pink5 = [139, 10, 80];    // Very dark pink #8B0A50
-
-                let color;
-                if (heightPercentage < 0.15) {
-                    const t = heightPercentage * 6.67;
-                    color = pink1.map((start, i) =>
-                        Math.round(start + (pink2[i] - start) * t)
-                    );
-                } else if (heightPercentage < 0.3) {
-                    const t = (heightPercentage - 0.15) * 6.67;
-                    color = pink2.map((start, i) =>
-                        Math.round(start + (pink3[i] - start) * t)
-                    );
-                } else if (heightPercentage < 0.45) {
-                    const t = (heightPercentage - 0.3) * 6.67;
-                    color = pink3.map((start, i) =>
-                        Math.round(start + (pink4[i] - start) * t)
-                    );
-                } else {
-                    const t = Math.min(1, (heightPercentage - 0.45) * 1.8);
-                    color = pink4.map((start, i) =>
-                        Math.round(start + (pink5[i] - start) * t)
-                    );
-                }
-
-                bar.style.height = `${finalHeight}px`;
-                bar.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-                bar.style.transition = 'height 0.1s ease, background-color 0.1s ease';
+                // More pronounced random variation
+                const randomHeight = height * (0.6 + Math.random() * 0.8);  // Increased randomness
+                bar.style.transition = 'height 0.15s ease';  // Slightly slower transition
+                setTimeout(() => {
+                    bar.style.height = `${10 + randomHeight}px`;
+                }, index * 15);  // Slightly longer delay between bars
             });
         }
 
@@ -242,17 +246,18 @@
                 recognition.interimResults = true;
                 recognition.lang = 'en-US';
 
-                // Create transcript div if it doesn't exist
-                let transcriptDiv = document.getElementById('transcript');
-                if (!transcriptDiv) {
-                    transcriptDiv = document.createElement('div');
-                    transcriptDiv.id = 'transcript';
-                    document.body.appendChild(transcriptDiv);
-                }
+                // Create transcript div
+                const transcriptDiv = document.createElement('div');
+                transcriptDiv.id = 'transcript';
+                transcriptDiv.style.margin = '20px';
+                transcriptDiv.style.padding = '10px';
+                transcriptDiv.style.border = '1px solid #ddd';
+                transcriptDiv.style.borderRadius = '5px';
 
-                // Remove the waveform creation - we'll use the one from HTML
-                // const waveform = createWaveform();
-                // document.body.appendChild(waveform);
+                // Create and add waveform
+                const waveform = createWaveform();
+                document.body.insertBefore(transcriptDiv, circle);
+                document.body.insertBefore(waveform, circle);
 
                 // Set up audio analysis
                 navigator.mediaDevices.getUserMedia({ audio: true })
@@ -302,40 +307,43 @@
                         const transcript = event.results[i][0].transcript;
                         if (event.results[i].isFinal) {
                             finalTranscript += transcript;
-                            document.getElementById('status').textContent = 'Status: Processing...';
+                            console.log('Final transcript:', transcript);
+                            // Don't send immediately, set a timeout
                             window.transcriptTimeout = setTimeout(() => {
                                 sendMessage(transcript);
-                            }, 1000);
+                            }, 1000); // Wait 1 second before sending
                         } else {
                             interimTranscript += transcript;
                         }
                     }
 
                     transcriptDiv.innerHTML = `
-                        <div style="color: #999;">${interimTranscript}</div>
-                        <div style="color: white;">${finalTranscript}</div>
+                        <div style="color: #666;">${interimTranscript}</div>
+                        <div style="color: #000;">${finalTranscript}</div>
                     `;
                 };
 
                 recognition.onerror = function (event) {
                     console.error('Speech recognition error:', event.error);
-                    document.getElementById('status').textContent = 'Status: Speech recognition error';
+                    status.textContent = 'Status: Speech recognition error';
                     animateWaveform(0);
                 };
 
                 recognition.onend = function () {
                     console.log('Recognition ended');
                     recognition.start();
-                    document.getElementById('status').textContent = 'Status: Listening';
+                    status.textContent = 'Status: Listening';
                 };
             } else {
                 console.log('Speech recognition not supported');
-                document.getElementById('status').textContent = 'Speech recognition not supported in this browser';
+                status.textContent = 'Speech recognition not supported in this browser';
             }
         }
 
         function startListening() {
             if (recognition) {
+                circle.classList.add('listening');
+                status.textContent = 'Status: Listening...';
                 recognition.start();
             }
         }
@@ -347,20 +355,15 @@
                 ws.send(JSON.stringify(payload));
             } else {
                 console.error('WebSocket not connected');
-                document.getElementById('status').textContent = 'Status: WebSocket not connected';
+                status.textContent = 'Status: WebSocket not connected';
             }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Make sure status element exists before attempting connection
-            const status = document.getElementById('status');
-            if (status) {
-                connectWebSocket();
-                initSpeechRecognition();
-                startListening();
-            } else {
-                console.error('Status element not found');
-            }
+            connectWebSocket();
+            initSpeechRecognition();
+
+            circle.addEventListener('click', startListening);
         });
     </script>
 </body>

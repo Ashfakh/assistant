@@ -70,3 +70,56 @@ class DataEmbedding(models.Model):
                 opclasses=["jsonb_path_ops"],
             ),
         ]
+
+class User(models.Model):
+    GENDER_CHOICES = (
+        ('M', 'Male'),
+        ('F', 'Female'),
+        ('O', 'Other'),
+    )
+    
+    ROLE_CHOICES = (
+        ('DAD', 'Dad'),
+        ('SON', 'Son'),
+    )
+
+    name = models.CharField(max_length=255)
+    age = models.IntegerField()
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
+    role = models.CharField(max_length=3, choices=ROLE_CHOICES)
+    mood_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'users'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.role})"
+
+    @property
+    def mood_schema(self):
+        """
+        Example mood JSON structure:
+        {
+            "timestamp": "2024-03-20T14:30:00Z",
+            "overall_mood": "good",  # good, neutral, bad
+            "energy_level": 8,       # scale 1-10
+            "emotional_state": {
+                "happiness": 7,      # scale 1-10
+                "anxiety": 3,        # scale 1-10
+                "irritability": 2,   # scale 1-10
+                "stress": 4         # scale 1-10
+            },
+            "physical_state": {
+                "pain_level": 2,     # scale 1-10
+                "fatigue": 3,        # scale 1-10
+                "sleep_quality": 8   # scale 1-10
+            },
+            "notes": "Feeling well after morning walk",
+            "activities": ["walking", "reading", "family time"],
+            "medication_taken": true
+        }
+        """
+        return {}
