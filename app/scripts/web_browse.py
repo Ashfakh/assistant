@@ -1,6 +1,4 @@
-import time
 from typing import List, Optional
-from networkx import star_graph
 from typing_extensions import TypedDict
 
 from langchain_core.messages import BaseMessage, SystemMessage
@@ -318,7 +316,7 @@ async def call_agent(question: str, page, max_steps: int = 150):
         display.clear_output(wait=False)
         steps.append(f"{len(steps) + 1}. {action}: {action_input}")
         print("\n".join(steps))
-        # display.display(display.Image(base64.b64decode(event["agent"]["img"])))
+        display.display(display.Image(base64.b64decode(event["agent"]["img"])))
         if "ANSWER" in action:
             final_answer = action_input[0]
             break
@@ -332,11 +330,10 @@ class WebBrowse:
     def __init__(self):
         pass
 
-    async def browse(self, query: str, website: str, prompt: str):
+    async def browse(self, query: str, website: str):
         print("prompt=============\n")
-        await asyncio.sleep(5)
         print(prompt.messages[0].prompt[0].template)
-        prompt.messages[0].prompt[0].template = prompt
+        prompt.messages[0].prompt[0].template = "Imagine you are a robot browsing the web, just like humans. Now you need to complete a task and achieve a Goal. In each iteration, you will receive an Observation that includes a screenshot of a webpage and some texts. This screenshot will\nfeature Numerical Labels placed in the TOP LEFT corner of each Web Element. Carefully analyze the visual\ninformation to identify the Numerical Label corresponding to the Web Element that requires interaction, then follow\nthe guidelines and choose one of the following actions:\n\n1. Click a Web Element.\n2. Delete existing content in a textbox and then type content.\n3. Scroll up or down.\n4. Wait \n5. Go back\n7. Return to google to start over.\n8. Mark Goal as Success.\n\nCorrespondingly, Action should STRICTLY follow the format:\n\n- Click [Numerical_Label] \n- Type [Numerical_Label]; [Content] \n- Scroll [Numerical_Label or WINDOW]; [up or down] \n- Wait \n- GoBack\n- Google\n- Goal [Success]\n\nKey Guidelines You MUST follow:\n\n* Action guidelines *\n1) Execute only one action per iteration.\n2) When clicking or typing, ensure to select the correct bounding box.\n3) Numeric labels lie in the top-left corner of their corresponding bounding boxes and are colored the same.\n\n* Web Browsing Guidelines *\n1) Don't interact with useless web elements like Login, Sign-in, donation that appear in Webpages\n2) Select strategically to minimize time wasted.\n3) If the Task is to play a youtube video, If the video page is open, set Goal as Success. If your task is to send a message, once the message is send, set Goal as Success\n\nYour reply should strictly follow the format:\n\nThought: {{Your brief thoughts (briefly summarize the info that will help you achieve Goal)}}\nAction: {{One Action format you choose}}\nThen the User will provide:\nObservation: {{A labeled screenshot Given by User}}\n"
         print("==================\n")
         logger.info(f"Browsing the web for {query} on {website}")
 

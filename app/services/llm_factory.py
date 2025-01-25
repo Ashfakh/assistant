@@ -88,7 +88,7 @@ class LLM:
         
     def construct_message_hash(self, messages: List[Union[SystemMessage, HumanMessage, AIMessage]]):
         msg_str = "".join([msg.content for msg in messages])
-        logger.info("messages", messages=msg_str)
+        # logger.info("messages", messages=msg_str)
         return hashlib.sha256(msg_str.encode()).hexdigest()
         
     def get_cached_response(self, messages: List[Union[SystemMessage, HumanMessage, AIMessage]]):
@@ -99,4 +99,4 @@ class LLM:
     def set_cached_response(self, messages: List[Union[SystemMessage, HumanMessage, AIMessage]], response: str):
         logger.info("Setting cached response", message=response)
         msg_hash = self.construct_message_hash(messages)
-        cache.set(msg_hash, response)
+        cache.set(msg_hash, response, timeout=60*60*24)

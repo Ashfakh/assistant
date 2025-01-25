@@ -224,86 +224,60 @@
     <script>
         let ws;
         let recognition;
-        let isConnected = false;
+        let isListening = false;
+        let messageTimeout;
 
         function connectWebSocket() {
-            // Generate a random session ID if not already stored
-            let sessionId = localStorage.getItem('sessionId');
-            if (!sessionId) {
-                sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('sessionId', sessionId);
-            }
+            const sessionId = localStorage.getItem('sessionId') ||
+                'session_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('sessionId', sessionId);
 
-            // Get role from URL parameters
             const urlParams = new URLSearchParams(window.location.search);
-            const role = urlParams.get('role') || 'default'; // fallback to 'default' if not specified
+            const role = urlParams.get('role') || 'default';
 
-            // Create WebSocket connection with query parameters
             ws = new WebSocket(`ws://localhost:8000/ws?session_id=${sessionId}&role=${role}`);
 
             ws.onopen = () => {
-                document.getElementById('statusText').textContent = `Status: Connected (${role})`;
-                console.log('WebSocket connected');
-            };
-
-            ws.onclose = () => {
-                document.getElementById('statusText').textContent = 'Status: Disconnected';
-                console.log('WebSocket disconnected');
-                isConnected = false;
-                const startButton = document.getElementById('startButton');
-                startButton.disabled = false;
-                startButton.textContent = 'Start Listening';
+                document.getElementById('statusText').textContent = 'Status: Connected';
+                startListening();
             };
 
             ws.onmessage = async (event) => {
                 if (event.data instanceof Blob) {
-                    // Handle audio response
-                    const audioUrl = URL.createObjectURL(event.data);
-                    const audio = new Audio(audioUrl);
+                    // Stop listening while playing back audio
+                    if (recognition) {
+                        recognition.stop();
+                    }
 
-                    // Create AudioContext for analyzing the audio playback
+                    document.getElementById('statusText').textContent = 'Status: Playing response';
+
+                    const audio = new Audio(URL.createObjectURL(event.data));
+
+                    // Set up audio visualization
                     const audioContext = new AudioContext();
                     const source = audioContext.createMediaElementSource(audio);
                     const analyser = audioContext.createAnalyser();
-
                     source.connect(analyser);
                     analyser.connect(audioContext.destination);
 
                     analyser.fftSize = 256;
                     const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-                    // Animation function for audio playback
                     function updatePlaybackWaveform() {
                         if (!audio.paused) {
                             analyser.getByteFrequencyData(dataArray);
                             const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
                             animateWaveform(average);
                             requestAnimationFrame(updatePlaybackWaveform);
-                        } else {
-                            // Reset bars when audio finishes
-                            const bars = document.querySelectorAll('.wave-bar');
-                            bars.forEach(bar => {
-                                bar.style.height = '5px';
-                            });
                         }
                     }
 
-                    // Start animation when audio starts playing
-                    audio.addEventListener('play', () => {
-                        document.getElementById('statusText').textContent = 'Status: Talking';
-                        document.querySelector('.loader').style.display = 'none';
-                        updatePlaybackWaveform();
-                    });
+                    audio.addEventListener('play', updatePlaybackWaveform);
 
                     audio.addEventListener('ended', () => {
+                        // Resume listening after audio finishes
                         document.getElementById('statusText').textContent = 'Status: Listening';
-                        document.querySelector('.loader').style.display = 'none';
-                        // Reset bars when audio finishes
-                        const bars = document.querySelectorAll('.wave-bar');
-                        bars.forEach(bar => {
-                            bar.style.height = '5px';
-                            bar.style.backgroundColor = '#FF69B4';
-                        });
+                        startListening();
                     });
 
                     await audio.play();
@@ -440,131 +414,88 @@
         }
 
         function initSpeechRecognition() {
-            if ('webkitSpeechRecognition' in window) {
-                recognition = new webkitSpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.lang = 'en-US';
+            if (!('webkitSpeechRecognition' in window)) {
+                alert('Speech recognition is not supported in this browser');
+                return;
+            }
 
-                // Create transcript div if it doesn't exist
-                let transcriptDiv = document.getElementById('transcript');
-                if (!transcriptDiv) {
-                    transcriptDiv = document.createElement('div');
-                    transcriptDiv.id = 'transcript';
-                    document.body.appendChild(transcriptDiv);
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            // Set up microphone visualization
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    const audioContext = new AudioContext();
+                    const analyser = audioContext.createAnalyser();
+                    const microphone = audioContext.createMediaStreamSource(stream);
+                    microphone.connect(analyser);
+                    analyser.fftSize = 256;
+
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                    function updateMicWaveform() {
+                        if (isListening) {
+                            analyser.getByteFrequencyData(dataArray);
+                            const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+                            animateWaveform(average);
+                        }
+                        requestAnimationFrame(updateMicWaveform);
+                    }
+
+                    updateMicWaveform();
+                });
+
+            recognition.onresult = (event) => {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript = transcript;
+                    } else {
+                        interimTranscript = transcript;
+                    }
                 }
 
-                // Remove the waveform creation - we'll use the one from HTML
-                // const waveform = createWaveform();
-                // document.body.appendChild(waveform);
+                document.getElementById('transcript').innerHTML = `
+                    <div style="color: #999;">${interimTranscript}</div>
+                    <div style="color: white;">${finalTranscript}</div>
+                `;
 
-                // Set up audio analysis
-                navigator.mediaDevices.getUserMedia({ audio: true })
-                    .then(stream => {
-                        const audioContext = new AudioContext();
-                        const analyser = audioContext.createAnalyser();
-                        const microphone = audioContext.createMediaStreamSource(stream);
-                        microphone.connect(analyser);
+                // Clear existing timeout
+                if (messageTimeout) clearTimeout(messageTimeout);
 
-                        analyser.fftSize = 256;
-                        analyser.smoothingTimeConstant = 0.8;
-                        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-                        function updateWaveform() {
-                            analyser.getByteFrequencyData(dataArray);
-
-                            // Calculate average volume across all frequencies
-                            const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-
-                            // Only animate if the volume is above a certain threshold
-                            if (average > 10) {
-                                animateWaveform(average);
-                            } else {
-                                // Reset bars to minimum height when quiet
-                                const bars = document.querySelectorAll('.wave-bar');
-                                bars.forEach(bar => {
-                                    bar.style.height = '5px';
-                                });
-                            }
-
-                            requestAnimationFrame(updateWaveform);
-                        }
-                        updateWaveform();
-                    })
-                    .catch(err => console.error('Error accessing microphone:', err));
-
-                recognition.onresult = function (event) {
-                    let interimTranscript = '';
-                    let finalTranscript = '';
-
-                    // Clear any existing timeout
-                    if (window.transcriptTimeout) {
-                        clearTimeout(window.transcriptTimeout);
-                    }
-
-                    for (let i = event.resultIndex; i < event.results.length; i++) {
-                        const transcript = event.results[i][0].transcript;
-                        if (event.results[i].isFinal) {
-                            finalTranscript += transcript;
+                // If we have a final transcript, wait 1 second of silence before sending
+                if (finalTranscript) {
+                    messageTimeout = setTimeout(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
                             document.getElementById('statusText').textContent = 'Status: Processing';
-                            document.querySelector('.loader').style.display = 'block';
-                            window.transcriptTimeout = setTimeout(() => {
-                                sendMessage(transcript);
-                            }, 1000);
-                        } else {
-                            interimTranscript += transcript;
+                            ws.send(JSON.stringify({
+                                message: finalTranscript,
+                                responseType: 'audio'
+                            }));
                         }
-                    }
-
-                    transcriptDiv.innerHTML = `
-                        <div style="color: #999;">${interimTranscript}</div>
-                        <div style="color: white;">${finalTranscript}</div>
-                    `;
-                };
-
-                recognition.onerror = function (event) {
-                    console.error('Speech recognition error:', event.error);
-                    document.getElementById('statusText').textContent = 'Status: Speech recognition error';
-                    animateWaveform(0);
-                };
-
-                recognition.onend = function () {
-                    console.log('Recognition ended');
-                    recognition.start();
-                    document.getElementById('statusText').textContent = 'Status: Listening';
-                };
-            } else {
-                console.log('Speech recognition not supported');
-                document.getElementById('statusText').textContent = 'Speech recognition not supported in this browser';
-            }
+                    }, 1000);
+                }
+            };
         }
 
         function startListening() {
             if (recognition) {
+                isListening = true;
                 recognition.start();
-            }
-        }
-
-        function sendMessage(message) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const payload = { message: message, responseType: 'audio' };
-                console.log('Sending message:', payload);
-                ws.send(JSON.stringify(payload));
-            } else {
-                console.error('WebSocket not connected');
-                document.getElementById('statusText').textContent = 'Status: WebSocket not connected';
+                document.getElementById('statusText').textContent = 'Status: Listening';
             }
         }
 
         document.getElementById('startButton').addEventListener('click', function () {
-            if (!isConnected) {
-                this.disabled = true;
-                connectWebSocket();
-                initSpeechRecognition();
-                startListening();
-                this.textContent = 'Listening...';
-                isConnected = true;
-            }
+            this.disabled = true;
+            this.textContent = 'Listening...';
+            initSpeechRecognition();
+            connectWebSocket();
         });
 
         document.addEventListener('DOMContentLoaded', () => {
