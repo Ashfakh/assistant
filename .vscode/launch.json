@@ -72,6 +72,17 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
+        },
+        {
+            "name": "browse Script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/scripts/web_browse.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         }
     ]
 }
