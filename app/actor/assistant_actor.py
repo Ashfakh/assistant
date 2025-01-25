@@ -3,10 +3,12 @@ from typing import Optional
 
 from pydantic import BaseModel
 from app.actor.actor import Actor
+from app.actor.health_actor import HealthActor
 from app.actor.scheduler_actor import SchedulerActor
 from app.actor.entertainment_actor import EntertainmentActor
 from app.dto.assistant import AssistantMemory
 from app.dto.entertainment import EntertainmentMemory
+from app.dto.health import HealthMemory
 from app.dto.scheduler import SchedulerMemory
 from app.dto.session import QueryDTO, ResponseDTO
 from app.services.chat_service import ChatService
@@ -34,7 +36,7 @@ Entertainment - Movie/TV requests and controls. Examples:
   - "play a song"
   - "i want to watch a movie"
 News - News and traffic updates
-Health - Medicine and health monitoring
+Health - Excercise,Medicine and health monitoring
 Communication - Messages and calls
     - "call my son"
     - "send a message"
@@ -112,6 +114,7 @@ class AssistantActor(Actor):
         )
         self.scheduler_actor = SchedulerActor(initial_memory=SchedulerMemory())
         self.entertainment_actor = EntertainmentActor(initial_memory=EntertainmentMemory())
+        self.health_actor = HealthActor(initial_memory=HealthMemory())
 
     async def _on_receive(self, query_dto: QueryDTO):
         messages = []
@@ -206,35 +209,8 @@ class AssistantActor(Actor):
         return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
 
     async def handle_health(self, planner_state: PlannerState, query_dto: QueryDTO):
-        messages = []
-        health_prompt = """
-        You are Vaani's health assistant. Since this is a voice interface:
-        1. Describe one medicine at a time
-        2. Pause after describing each medicine
-        3. Ask for confirmation before proceeding to next medicine
-        4. Break complex instructions into simple steps
-        5. Confirm understanding after each step
-        
-        Current Health Context:
-        Medicine Schedule:
-        - 2 PM: Ecosprin 75 (white round tablet) for heart
-        - 2 PM: Telmisartan (green oval tablet) for blood pressure
-        - 7 PM: Diabetes medication
-        
-        Inventory Status:
-        - Ecosprin: 2 tablets remaining (refill needed)
-        - Telmisartan: 10 tablets remaining
-        - Diabetes medication: 15 tablets remaining
-        
-        Preferred Pharmacy: Apollo
-        Next Health Check: Sugar test due today
-        """
-        
-        messages.append(SystemMessage(content=health_prompt))
-        messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
-        messages.append(HumanMessage(content=query_dto.message))
-        response = await self.chat_llm.ainvoke(messages)
-        return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
+        response = await self.health_actor.ask(query_dto)
+        return ResponseDTO(response=response, artifact_url="", artifact_type="")
 
     async def handle_communication(self, planner_state: PlannerState, query_dto: QueryDTO):
         messages = []
