@@ -17,7 +17,7 @@ class CoordinatorActor(Actor):
             response = await self.assistant_actor.ask(query_dto)
             query_dto.session_dto.chat_history.append(ChatMessage(role="user", content=query_dto.message))
             query_dto.session_dto.chat_history.append(ChatMessage(role="assistant", content=response))
-            return await self.assistant_actor.ask(query_dto)
+            return response
         
 
 

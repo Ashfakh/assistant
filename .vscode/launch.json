@@ -39,6 +39,39 @@
                 "uriFormat": "http://localhost:8000",
                 "action": "openExternally"
             }
+        },
+        {
+            "name": "Swiggy Script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/scripts/swiggy_script.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Blinkit Script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/scripts/blinkit_script.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Test Script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/scripts/test_script.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         }
     ]
 }

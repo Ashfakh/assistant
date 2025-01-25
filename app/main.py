@@ -7,7 +7,6 @@ import django
 from django.conf import settings
 
 # Import Django models
-from app.api.websocket import WebSocketManager
 
 # Configure Django settings
 def configure_django():
@@ -17,6 +16,9 @@ def configure_django():
 
 # Initialize Django
 configure_django()
+
+from app.api.websocket import WebSocketManager
+
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -33,8 +35,22 @@ app.add_middleware(
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    return templates.TemplateResponse("index2.html", {"request": request})
+    # Get role from query parameters, default to 'user' if not specified
+    role = request.query_params.get("role", "dad")
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "role": role
+    })
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket_manager.handle_websocket(websocket) 
+    # Get query parameters
+    session_id = websocket.query_params.get("session_id")
+    role = websocket.query_params.get("role", "dad")  # default to 'user' if not specified
+    language = websocket.query_params.get("language", "en")  # default to English
+    
+    if not session_id:
+        await websocket.close(code=4000, reason="Missing session_id parameter")
+        return
+        
+    await websocket_manager.handle_websocket(websocket, session_id, role, language)

@@ -69,6 +69,37 @@
             color: #666;
             margin-top: 10px;
         }
+
+        .wave-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            height: 100px;
+            margin: 20px 0;
+        }
+
+        .wave-bar {
+            width: 4px;
+            height: 20px;
+            background: #3498db;
+            border-radius: 3px;
+            animation: none;
+        }
+
+        @keyframes wave {
+            0% {
+                height: 10px;
+            }
+
+            50% {
+                height: 100px;
+            }
+
+            100% {
+                height: 10px;
+            }
+        }
     </style>
 </head>
 
@@ -93,10 +124,22 @@
         const status = document.getElementById('status');
 
         function connectWebSocket() {
-            ws = new WebSocket('ws://localhost:8000/ws');
+            // Generate a random session ID if not already stored
+            let sessionId = localStorage.getItem('sessionId');
+            if (!sessionId) {
+                sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('sessionId', sessionId);
+            }
+
+            // Get role from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const role = urlParams.get('role') || 'default'; // fallback to 'default' if not specified
+
+            // Create WebSocket connection with query parameters
+            ws = new WebSocket(`ws://localhost:8000/ws?session_id=${sessionId}&role=${role}`);
 
             ws.onopen = () => {
-                status.textContent = 'Status: Connected';
+                status.textContent = `Status: Connected (${role})`;
             };
 
             ws.onclose = () => {
@@ -106,11 +149,57 @@
 
             ws.onmessage = async (event) => {
                 if (event.data instanceof Blob) {
+                    // Handle audio response
                     const audioUrl = URL.createObjectURL(event.data);
                     const audio = new Audio(audioUrl);
+
+                    // Create AudioContext for analyzing the audio playback
+                    const audioContext = new AudioContext();
+                    const source = audioContext.createMediaElementSource(audio);
+                    const analyser = audioContext.createAnalyser();
+
+                    source.connect(analyser);
+                    analyser.connect(audioContext.destination);
+
+                    analyser.fftSize = 256;
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                    // Animation function for audio playback
+                    function updatePlaybackWaveform() {
+                        if (!audio.paused) {
+                            analyser.getByteFrequencyData(dataArray);
+                            const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+                            animateWaveform(average);
+                            requestAnimationFrame(updatePlaybackWaveform);
+                        } else {
+                            // Reset bars when audio finishes
+                            const bars = document.querySelectorAll('.wave-bar');
+                            bars.forEach(bar => {
+                                bar.style.height = '5px';
+                            });
+                        }
+                    }
+
+                    // Start animation when audio starts playing
+                    audio.addEventListener('play', () => {
+                        updatePlaybackWaveform();
+                    });
+
                     circle.classList.add('listening');
                     await audio.play();
                     circle.classList.remove('listening');
+                } else {
+                    // Handle text response
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.error) {
+                            console.error('Error:', data.error);
+                        } else if (data.response) {
+                            console.log('Response:', data.response);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing message:', e);
+                    }
                 }
             };
 
@@ -120,6 +209,36 @@
             };
         }
 
+        function createWaveform() {
+            const waveContainer = document.createElement('div');
+            waveContainer.className = 'wave-container';
+
+            // Create 40 bars for a fuller waveform
+            for (let i = 0; i < 40; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'wave-bar';
+                waveContainer.appendChild(bar);
+            }
+
+            return waveContainer;
+        }
+
+        function animateWaveform(volume) {
+            const bars = document.querySelectorAll('.wave-bar');
+            bars.forEach((bar, index) => {
+                // Increased height scaling
+                const height = Math.min(100, (volume / 255) * 100);  // Increased max height to 100px
+                bar.style.height = `${10 + height}px`;  // Increased base height
+
+                // More pronounced random variation
+                const randomHeight = height * (0.6 + Math.random() * 0.8);  // Increased randomness
+                bar.style.transition = 'height 0.15s ease';  // Slightly slower transition
+                setTimeout(() => {
+                    bar.style.height = `${10 + randomHeight}px`;
+                }, index * 15);  // Slightly longer delay between bars
+            });
+        }
+
         function initSpeechRecognition() {
             if ('webkitSpeechRecognition' in window) {
                 recognition = new webkitSpeechRecognition();
@@ -127,13 +246,53 @@
                 recognition.interimResults = true;
                 recognition.lang = 'en-US';
 
+                // Create transcript div
                 const transcriptDiv = document.createElement('div');
                 transcriptDiv.id = 'transcript';
                 transcriptDiv.style.margin = '20px';
                 transcriptDiv.style.padding = '10px';
                 transcriptDiv.style.border = '1px solid #ddd';
                 transcriptDiv.style.borderRadius = '5px';
+
+                // Create and add waveform
+                const waveform = createWaveform();
                 document.body.insertBefore(transcriptDiv, circle);
+                document.body.insertBefore(waveform, circle);
+
+                // Set up audio analysis
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        const audioContext = new AudioContext();
+                        const analyser = audioContext.createAnalyser();
+                        const microphone = audioContext.createMediaStreamSource(stream);
+                        microphone.connect(analyser);
+
+                        analyser.fftSize = 256;
+                        analyser.smoothingTimeConstant = 0.8;
+                        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                        function updateWaveform() {
+                            analyser.getByteFrequencyData(dataArray);
+
+                            // Calculate average volume across all frequencies
+                            const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+
+                            // Only animate if the volume is above a certain threshold
+                            if (average > 10) {
+                                animateWaveform(average);
+                            } else {
+                                // Reset bars to minimum height when quiet
+                                const bars = document.querySelectorAll('.wave-bar');
+                                bars.forEach(bar => {
+                                    bar.style.height = '5px';
+                                });
+                            }
+
+                            requestAnimationFrame(updateWaveform);
+                        }
+                        updateWaveform();
+                    })
+                    .catch(err => console.error('Error accessing microphone:', err));
 
                 recognition.onresult = function (event) {
                     let interimTranscript = '';
@@ -159,6 +318,7 @@
                 recognition.onerror = function (event) {
                     console.error('Speech recognition error:', event.error);
                     status.textContent = 'Status: Speech recognition error';
+                    animateWaveform(0);
                 };
 
                 recognition.onend = function () {

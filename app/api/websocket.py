@@ -3,7 +3,7 @@ import uuid
 import json
 from app.actor.coordinator_actor import CoordinatorActor
 from app.dto.coordinator import CoordinatorMemory
-from app.dto.session import QueryDTO, SessionDTO
+from app.dto.session import QueryDTO, SessionDTO, UserType
 from app.services.transcription_service import TranscriptionService
 from app.services.chat_service import ChatService
 from app.services.audio_service import AudioService
@@ -15,13 +15,12 @@ class WebSocketManager:
         self.coordinator_actor = None
         self.session_dto = None
 
-    async def handle_websocket(self, websocket: WebSocket):
+    async def handle_websocket(self, websocket: WebSocket, session_id: str, role: str, language: str):
         print("New WebSocket connection attempt")
         await websocket.accept()
-        session_id = str(uuid.uuid4())
-        self.session_dto = SessionDTO(id=session_id)
+        if not self.session_dto:
+            self.session_dto = SessionDTO(id=session_id, active_user=UserType(role), language=language)
         print(f"WebSocket connected: {session_id}")
-
         self.coordinator_actor = CoordinatorActor(initial_memory=CoordinatorMemory(active_actor="assistant"))
 
         try:
@@ -33,9 +32,9 @@ class WebSocketManager:
                     
                     if message["type"] == "websocket.receive":
                         if "bytes" in message:
-                            await self.handle_audio_message(websocket, message["bytes"], session_id)
+                            await self.handle_audio_message(websocket, message["bytes"])
                         elif "text" in message:
-                            await self.handle_text_message(websocket, message["text"], session_id)
+                            await self.handle_text_message(websocket, message["text"])
 
                 except WebSocketDisconnect:
                     print(f"Client disconnected: {session_id}")
@@ -54,7 +53,7 @@ class WebSocketManager:
             except:
                 pass  # Ignore any errors during close
 
-    async def handle_audio_message(self, websocket: WebSocket, audio_data: bytes, session_id: str):
+    async def handle_audio_message(self, websocket: WebSocket, audio_data: bytes):
         print(f"Received audio data: {len(audio_data)} bytes")
 
         # Transcribe audio to text
@@ -63,9 +62,9 @@ class WebSocketManager:
         print(f"Transcribed text: {text}")
 
         # Get response and send as audio
-        await self._process_and_send_response(websocket, text, session_id, "audio")
+        await self._process_and_send_response(websocket, text, "audio")
 
-    async def handle_text_message(self, websocket: WebSocket, text: str, session_id: str):
+    async def handle_text_message(self, websocket: WebSocket, text: str):
         try:
             # Parse the text message as JSON
             print(f"Received raw text: {text}")
@@ -82,7 +81,7 @@ class WebSocketManager:
                 return
 
             # Process message and send response
-            await self._process_and_send_response(websocket, message, session_id, response_type)
+            await self._process_and_send_response(websocket, message, response_type)
 
         except json.JSONDecodeError as e:
             print(f"JSON decode error: {str(e)}")
@@ -93,7 +92,7 @@ class WebSocketManager:
             error_message = f"Error processing message: {str(e)}"
             await websocket.send_text(json.dumps({"error": error_message}))
 
-    async def _process_and_send_response(self, websocket: WebSocket, message: str, session_id: str, response_type: str):
+    async def _process_and_send_response(self, websocket: WebSocket, message: str, response_type: str):
         """Common method to process messages and send responses."""
         try:
             # Get chat response

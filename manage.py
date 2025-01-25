@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 import os
 import sys
+import django
 
 def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app.core.settings')
+    django.setup()  # This is important to initialize Django
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

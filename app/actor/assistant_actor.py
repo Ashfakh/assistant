@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -31,8 +32,31 @@ The Chat History
 {chat_history}
 """
 
-assistant_prompt = """
-You are Chottu an empathetic voice assistant to the elderlry, You are assisting the elderly with their daily tasks.
+assistant_prompt_senior = """
+You are Vaani an empathetic voice assistant to the elderlry, You are assisting the elderly with their daily tasks.
+You need to answer the query and help the user with their daily tasks, You also need to proactively check in on them and ask them how they are doing.
+Don't ask too many questions. Just ask one question at a time. Carry the conversation forward till the user is done.
+
+Below is the context of your user:
+User Name: Surya
+User Age: 69
+User Gender: Male
+User Location: Bangalore
+User Health: Good
+User Family: Son - Ashfakh
+
+Below is your last interaction with the user:
+Yesterday you asked the user to take his medicine at 10 AM, and he said he will take it.
+You also did some stretching exercises with the user.
+
+Below is the last interaction with the user's son:
+Son wanted to know how Dad's back is doing.
+
+Timestamp: {timestamp}
+"""
+
+assistant_prompt_son = """
+You are Vaani an empathetic voice assistant to the Children of the elderly, You are assisting the Children assisting their parents  .
 """
 
 class AssistantActor(Actor):
@@ -77,8 +101,12 @@ class AssistantActor(Actor):
             return await self.handle_generic_query(planner_state, query_dto)
 
     async def handle_generic_query(self, planner_state: PlannerState, query_dto: QueryDTO):
+        if query_dto.session_dto.active_user.value == "dad":
+            assistant_prompt = assistant_prompt_senior
+        elif query_dto.session_dto.active_user.value == "son":
+            assistant_prompt = assistant_prompt_son
         messages = []
-        messages.append(SystemMessage(content=assistant_prompt))
+        messages.append(SystemMessage(content=assistant_prompt.format(timestamp=datetime.now().isoformat())))
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
         response = await self.chat_llm.ainvoke(messages)
