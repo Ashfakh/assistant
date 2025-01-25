@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
+import pytz
 
 from pydantic import BaseModel
 from app.actor.actor import Actor
@@ -14,26 +15,35 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 health_prompt = """
-        You are Vaani's health and exercise assistant. Since this is a voice interface:
+        You are User's health and exercise assistant. Since this is a voice interface:
         If the user asks for medicine, you need to set the activity to medicine.
         If you think the user is asking for exercise, you need to set the activity to exercise.
         If you need clarity on what the user is asking, you need to ask the user for it by setting the message to your question.
         Do not set the activity to medicine or exercise if you are not sure.
+
+        Current Time: {timestamp}
 """
 
 medicine_prompt = """
-        You are Vaani's health and exercise assistant. Since this is a voice interface:
+        You are User's medicine assistant. Since this is a voice interface:
         1. Describe one medicine at a time
         2. Pause after describing each medicine
         3. Ask for confirmation before proceeding to next medicine
         4. Break complex instructions into simple steps
         5. Confirm understanding after each step
+        6. You can't prescribe medicine, you can only describe what medicine to take.
+        7. Incase user asks for a medicine not in the list, you need to ask him to consult a doctor.
+        
+        Current Time: {timestamp}
         
         Current Health Context:
         Medicine Schedule:
         - 2 PM: Ecosprin 75 (white round tablet) for heart
         - 2 PM: Telmisartan (green oval tablet) for blood pressure
         - 7 PM: Diabetes medication
+
+        Based on the time, If the time has passed, ask if user has taken his medicine, 
+        or remind him to take it if the time has not passed.
         
         Inventory Status:
         - Ecosprin: 2 tablets remaining (refill needed)
@@ -44,22 +54,26 @@ medicine_prompt = """
         Next Health Check: Sugar test due today
         """
 
-exercise_script_prompt = """ You are Vaani's Exercise assistant.
+exercise_script_prompt = """ You are User's Exercise assistant.
  You are given a list of exercises and you need to select one of them based on the user's health context.
  You also need to construct an excercise script.
  Excercise script is a list of messages that you need to send to the user to be performed one by one
 
- {list_of_exercises}
+ Current Time: {timestamp}
+
 """
 
-excercise_prompt = """ You are Vaani's Exercise assistant.
+excercise_prompt = """ You are User's Exercise assistant.
  You are walking the user through the excercise script. If the user acknowledges the excercise, you need to move to the next excercise by setting the message to the next excercise in the script. and set the user_acknowledged to True.
  If the user experiences difficulty, you need to ask the user to perform the excercise in a simpler way,
    encourage them like a coach. and set the user_acknowledged to False.
  You need to ask the user to perform the excercise. one by one. 
 Once the user has performed all the excercises, you need to congratulate the user and set the user_acknowledged to True.
 when you set the message, craft it in a way a calm helpful health coach would. Use ... for pauses. and use "" for Emphasizing parts if necessary
- {exercise_script}
+
+Current Time: {timestamp}
+
+{exercise_script}
 """
 
 class HealthState(BaseModel):
@@ -84,15 +98,18 @@ class HealthActor(Actor):
         self.health_llm = LLMFactory.get_chat_llm(
             llm_provider=LLMProvider.OPENAI,
             model_name="gpt-4o",
-        ).with_structured_output(HealthState)
+            structured_cls=HealthState
+        )
         self.exercise_script_llm = LLMFactory.get_chat_llm(
             llm_provider=LLMProvider.OPENAI,
             model_name="gpt-4o",
-        ).with_structured_output(ExerciseScript)
+            structured_cls=ExerciseScript
+        )
         self.exercise_llm = LLMFactory.get_chat_llm(
             llm_provider=LLMProvider.OPENAI,
             model_name="gpt-4o",
-        ).with_structured_output(ExerciseState)
+            structured_cls=ExerciseState
+        )
         self.chat_llm = LLMFactory.get_chat_llm(
             llm_provider=LLMProvider.OPENAI,
             model_name="gpt-4o",
@@ -103,7 +120,8 @@ class HealthActor(Actor):
         if not self.memory.current_activity:
             logger.debug("No current activity, determining activity type")
             messages = []
-            messages.append(SystemMessage(content=health_prompt.format(user_type=query_dto.session_dto.active_user, timestamp=datetime.now().isoformat())))
+            ist_time = datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
+            messages.append(SystemMessage(content=health_prompt.format(user_type=query_dto.session_dto.active_user, timestamp=ist_time)))
             messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
             messages.append(HumanMessage(content=query_dto.message))
             health_state = await self.health_llm.ainvoke(messages)
@@ -120,9 +138,11 @@ class HealthActor(Actor):
     async def handle_medicine(self, query_dto: QueryDTO):
         logger.info("Handling medicine query", message=query_dto.message)
         messages = []
-        messages.append(SystemMessage(content=medicine_prompt))
+        ist_time = datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
+        messages.append(SystemMessage(content=medicine_prompt.format(timestamp=ist_time)))
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
+        print(messages)
         response = await self.chat_llm.ainvoke(messages)
         logger.info("Generated medicine response", response=response)
         return response.content
@@ -132,7 +152,8 @@ class HealthActor(Actor):
         if not self.memory.exercise_script:
             logger.debug("Generating new exercise script")
             messages = []
-            messages.append(SystemMessage(content=exercise_script_prompt))
+            ist_time = datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
+            messages.append(SystemMessage(content=exercise_script_prompt.format(timestamp=ist_time)))
             messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
             messages.append(HumanMessage(content=query_dto.message))
             exercise_script = await self.exercise_script_llm.ainvoke(messages)
@@ -145,7 +166,10 @@ class HealthActor(Actor):
                         script_index=self.memory.script_index,
                         total_steps=len(self.memory.exercise_script))
             messages = []
-            messages.append(SystemMessage(content=excercise_prompt.format(exercise_script=self.construct_exercise_script(self.memory.exercise_script))))
+            ist_time = datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
+            messages.append(SystemMessage(content=excercise_prompt.format(
+                timestamp=ist_time,
+                exercise_script=self.construct_exercise_script(self.memory.exercise_script))))
             messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
             messages.append(HumanMessage(content=query_dto.message))
             self.memory.script_index += 1
@@ -161,7 +185,10 @@ class HealthActor(Actor):
         else:
             logger.debug("Completing exercise routine")
             messages = []
-            messages.append(SystemMessage(content=excercise_prompt.format(exercise_script= self.construct_exercise_script(self.memory.exercise_script))))
+            ist_time = datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
+            messages.append(SystemMessage(content=excercise_prompt.format(
+                timestamp=ist_time,
+                exercise_script=self.construct_exercise_script(self.memory.exercise_script))))
             messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
             messages.append(HumanMessage(content=query_dto.message))
             exercise_state = await self.exercise_llm.ainvoke(messages)

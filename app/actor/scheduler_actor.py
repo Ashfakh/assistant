@@ -59,7 +59,8 @@ class SchedulerActor(Actor):
         self.llm = LLMFactory.get_chat_llm(
             llm_provider=LLMProvider.OPENAI,
             model_name="gpt-4o",
-        ).with_structured_output(SchedulerState)
+            structured_cls=SchedulerState
+        )
 
     async def _on_receive(self, query_dto: QueryDTO):        
         messages = []

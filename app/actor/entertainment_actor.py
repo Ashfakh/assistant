@@ -10,6 +10,7 @@ from app.services.chat_service import ChatService
 from app.services.llm_factory import LLMFactory, LLMProvider
 from langchain.schema import HumanMessage, SystemMessage
 import structlog
+import asyncio
 
 logger = structlog.get_logger(__name__)
 
@@ -51,7 +52,8 @@ class EntertainmentActor(Actor):
         self.llm = LLMFactory.get_chat_llm(
             llm_provider=LLMProvider.OPENAI,
             model_name="gpt-4o",
-        ).with_structured_output(EntertainmentState)
+            structured_cls=EntertainmentState
+        )
 
     async def _on_receive(self, query_dto: QueryDTO):        
         messages = []
@@ -62,7 +64,7 @@ class EntertainmentActor(Actor):
         if entertainment_state.message:
             return entertainment_state.message
         else:
-            await self.handle_entertainment(entertainment_state, query_dto)
+            asyncio.create_task(self.handle_entertainment(entertainment_state, query_dto))
             return None
         
     async def handle_entertainment(self, entertainment_state: EntertainmentState, query_dto: QueryDTO):

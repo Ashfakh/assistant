@@ -107,7 +107,8 @@ class AssistantActor(Actor):
         self.llm = LLMFactory.get_chat_llm(
             llm_provider=LLMProvider.OPENAI,
             model_name="gpt-4o",
-        ).with_structured_output(PlannerState)
+            structured_cls=PlannerState
+        )
         self.chat_llm = LLMFactory.get_chat_llm(
             llm_provider=LLMProvider.OPENAI,
             model_name="gpt-4o",
@@ -183,7 +184,11 @@ class AssistantActor(Actor):
         return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
 
     async def handle_entertainment(self, planner_state: PlannerState, query_dto: QueryDTO):
-        return await self.entertainment_actor.ask(query_dto)
+        response =  await self.entertainment_actor.ask(query_dto)
+        if response:
+            return ResponseDTO(response=response, artifact_url="", artifact_type="")
+        else:
+            return await self.handle_continue_conversation(planner_state, query_dto)
 
     async def handle_news(self, planner_state: PlannerState, query_dto: QueryDTO):
         messages = []

@@ -31,6 +31,16 @@ DATABASES = {
     }
 }
 
+REDIS_HOST: str = os.getenv("REDIS_HOST")
+REDIS_PORT: str = os.getenv("REDIS_PORT")
+
+CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": f"redis://{REDIS_HOST}:{REDIS_PORT}/0",
+        }
+    }
+
 # Required for Django ORM
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 USE_TZ = True

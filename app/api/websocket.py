@@ -7,19 +7,22 @@ from app.dto.session import QueryDTO, ResponseDTO, SessionDTO, UserType
 from app.services.transcription_service import TranscriptionService
 from app.services.chat_service import ChatService
 from app.services.audio_service import AudioService
+import hashlib
+from django.core.cache import cache
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 class WebSocketManager:
     def __init__(self):
         self.transcription_service = TranscriptionService()
         self.audio_service = AudioService()
         self.coordinator_actor = None
-        self.session_dto = None
 
     async def handle_websocket(self, websocket: WebSocket, session_id: str, role: str, language: str):
         print("New WebSocket connection attempt")
         await websocket.accept()
-        if not self.session_dto:
-            self.session_dto = SessionDTO(
+        self.session_dto = SessionDTO(
                 id=session_id, 
                 active_user=UserType(role),  # or UserType.SON depending on your needs
                 language=language
@@ -105,10 +108,22 @@ class WebSocketManager:
             print(f"Chat response received: {response}")
 
             if response_type == "audio":
-                # Convert response to speech
-                print("Converting to speech...")
-                audio_response = await self.audio_service.text_to_speech(response.response)
-                print(f"Audio response generated: {len(audio_response)} bytes")
+                # Check cache for audio response
+                cache_key = f"audio_{hashlib.sha256(response.response.encode()).hexdigest()}"
+                logger.info("Getting cached audio response", message=cache_key)
+                audio_response = cache.get(cache_key)
+                
+                if not audio_response:
+                    # Convert response to speech if not in cache
+                    print("Converting to speech...")
+                    audio_response = await self.audio_service.text_to_speech(response.response)
+                    print(f"Audio response generated: {len(audio_response)} bytes")
+                    # Cache the audio response
+                    logger.info("Setting cached audio response", message=cache_key)
+                    cache.set(cache_key, audio_response)
+                else:
+                    print("Using cached audio response")
+
                 await websocket.send_bytes(audio_response)
                 await websocket.send_text(json.dumps({"response": response.response, 
                                                       "artifact_url": response.artifact_url, 
