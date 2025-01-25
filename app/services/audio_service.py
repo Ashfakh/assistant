@@ -1,13 +1,13 @@
 # from openai import AsyncOpenAI
-from elevenlabs.client import ElevenLabs
+import requests
 from app.core import settings
 import asyncio
-from functools import partial
 
 class AudioService:
     def __init__(self):
         # self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        self.client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+        self.api_key = settings.ELEVENLABS_API_KEY
+        self.base_url = "https://api.elevenlabs.io/v1"
 
     async def text_to_speech(self, text: str) -> bytes:
         # response = await self.client.audio.speech.create(
@@ -16,16 +16,34 @@ class AudioService:
         #     input=text
         # )
         # return response.read()
+        headers = {
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": self.api_key
+        }
+        
+        data = {
+            "text": text,
+            "model_id": "eleven_monolingual_v1",
+            "voice_settings": {
+                "stability": 0.75,
+                "similarity_boost": 0.75,
+                "speaking_rate": 0.5,  # 0.5 is slower, 1.0 is normal, 2.0 is faster
+                "style": 0.0
+            }
+        }
+
         loop = asyncio.get_event_loop()
-        audio_generator = await loop.run_in_executor(
+        response = await loop.run_in_executor(
             None,
-            partial(
-                self.client.generate,
-                text=text,
-                voice_id="WnFIhLMD7HtSxjuKKrfY",
-                model="eleven_monolingual_v1"
+            lambda: requests.post(
+                f"{self.base_url}/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+                headers=headers,
+                json=data
             )
         )
-        # Convert generator to bytes
-        audio = b"".join(list(audio_generator))
-        return audio 
+        
+        if response.status_code == 200:
+            return response.content
+        else:
+            raise Exception(f"ElevenLabs API error: {response.text}") 

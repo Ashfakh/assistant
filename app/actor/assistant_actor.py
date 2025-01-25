@@ -26,10 +26,16 @@ Scheduler - ANY requests about reminders, schedules, or future tasks. Examples:
   - "remind me tomorrow"
   - "remind me later"
   - "set reminder"
-Entertainment - Movie/TV requests and controls
+Entertainment - Movie/TV requests and controls. Examples:
+  - "play a movie"
+  - "play a show"
+  - "play a song"
+  - "i want to watch a movie"
 News - News and traffic updates
 Health - Medicine and health monitoring
 Communication - Messages and calls
+    - "call my son"
+    - "send a message"
 GenericQuery - General conversation
 FollowUp - Continue previous thread
 
@@ -61,8 +67,8 @@ Health Conditions: Diabetes, High Blood Pressure
 Family Contacts: Rahul (son), Malini (daughter-in-law), Rohit (nephew)
 
 Current Context:
-Last Health Update: Sugar test due today
-Pending Tasks: Call Rahul back
+Last Health Update: Having some back stiffness. Recommended to do some mild exercises.
+Pending Tasks: Two missed calls from Rahul. Call Rahul back
 Recent Family Updates: Rohit planning to visit today
 Medicine Schedule: 8 AM - Heart and BP medicines, 7 PM - Diabetes medicine
 
@@ -154,14 +160,19 @@ class AssistantActor(Actor):
             Pending Tasks: Call Rahul back
             Recent Family Updates: Rohit planning to visit today
             Medicine Schedule: 2 PM - Heart and BP medicines, 7 PM - Diabetes medicine
+            Last generic conversation: On school life in Trichy. Mentioned that they had a good time in school, used to go to the movies 20km away every weekend.
 
             Important Guidelines:
             1. Understand common typos and speech patterns (e.g., "tom" usually means "tomorrow")
             2. For medicines: Describe the tablet by color/shape and purpose
             3. For entertainment: Offer specific options rather than open-ended choices
             4. For news: Start with local news, then offer national updates
-            5. Always confirm before sending messages to family
-            6. Keep track of medicine inventory and prompt for refills
+            5. If the user is feeling lonely or bored, start a general conversation with them. Continue from the last generic conversation you had with them.
+            6. Always confirm before sending messages to family
+            7. Keep track of medicine inventory and prompt for refills
+
+            If the request is for none of the above options, have a general conversation with the user especially if you notice they're feeling lonely or bored. E.g. Start with asking them whether they have eaten, how they're feeling. 
+            Continue the conversation based on your previous generic conversation with the user. E.g if the last time you spoke about their school life, maybe this time ask them more details or about college life.
 
             Current Time: {timestamp}
             """
