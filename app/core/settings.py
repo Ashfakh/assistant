@@ -12,6 +12,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "us-west-1")
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.contenttypes',
@@ -54,3 +58,6 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 AUTH_USER_MODEL = 'auth.User'
 
 ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY")
+SARVAM_API_KEY: str = os.getenv("SARVAM_API_KEY")
+
+EMAIL_BACKEND = "django_ses.SESBackend"

@@ -120,7 +120,7 @@ class WebSocketManager:
                     print(f"Audio response generated: {len(audio_response)} bytes")
                     # Cache the audio response
                     logger.info("Setting cached audio response", message=cache_key)
-                    cache.set(cache_key, audio_response, timeout=60*60*24)
+                    cache.set(cache_key, audio_response)
                 else:
                     print("Using cached audio response")
 

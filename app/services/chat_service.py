@@ -22,9 +22,13 @@ class ChatService:
         
         return assistant_message 
     
-    def create_messages(self, chat_history: list[ChatMessage]) -> list[BaseMessage]:
+    def create_messages(self, chat_history: list[ChatMessage], count: int = None) -> list[BaseMessage]:
         messages = []
-        for message in chat_history:
+        if count:
+            chat_history_small = chat_history[-count:]
+        else:
+            chat_history_small = chat_history
+        for message in chat_history_small:
             if message.role == "user":
                 messages.append(HumanMessage(content=message.content))
             else:

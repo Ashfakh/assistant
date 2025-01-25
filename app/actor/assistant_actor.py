@@ -4,11 +4,14 @@ from typing import Optional
 from pydantic import BaseModel
 from app.actor.actor import Actor
 from app.actor.health_actor import HealthActor
+from app.actor.message_actor import MessageActor
+from app.actor.order_actor import OrderActor
 from app.actor.scheduler_actor import SchedulerActor
 from app.actor.entertainment_actor import EntertainmentActor
 from app.dto.assistant import AssistantMemory
 from app.dto.entertainment import EntertainmentMemory
 from app.dto.health import HealthMemory
+from app.dto.message import MessageMemory
 from app.dto.scheduler import SchedulerMemory
 from app.dto.session import QueryDTO, ResponseDTO
 from app.services.chat_service import ChatService
@@ -36,6 +39,7 @@ Entertainment - Movie/TV requests and controls. Examples:
   - "play a song"
   - "i want to watch a movie"
 News - News and traffic updates
+Order - Ordering food
 Health - Excercise,Medicine and health monitoring
 Communication - Messages and calls
     - "call my son"
@@ -61,9 +65,8 @@ assistant_prompt_senior ="""
             Family Contacts: Rahul (son), Rohit (nephew)
 
             Current Context:
-            Last Health Update: Sugar test due today
+            Last Health Update: Blood test due .
             Pending Tasks: Call Rahul back
-            Recent Family Updates: Rohit planning to visit today
             Medicine Schedule: 2 PM - Heart and BP medicines, 7 PM - Diabetes medicine
             Last generic conversation: On school life in Trichy. Mentioned that they had a good time in school, used to go to the movies 20km away every weekend.
 
@@ -76,7 +79,7 @@ assistant_prompt_senior ="""
             6. Always confirm before sending messages to family
             7. Keep track of medicine inventory and prompt for refills
 
-            If the request is for none of the above options, have a general conversation with the user especially if you notice they're feeling lonely or bored. E.g. Start with asking them whether they have eaten, how they're feeling. 
+            If the request is for nothing, have a general conversation with the user especially if you notice they're feeling lonely or bored. E.g. Start the conversation with asking how they're feeling and continue the conversation based on your previous generic conversation with the user.
             Continue the conversation based on your previous generic conversation with the user. E.g if the last time you spoke about their school life, maybe this time ask them more details or about college life.
 
             Current Time: {timestamp}
@@ -116,6 +119,8 @@ class AssistantActor(Actor):
         self.scheduler_actor = SchedulerActor(initial_memory=SchedulerMemory())
         self.entertainment_actor = EntertainmentActor(initial_memory=EntertainmentMemory())
         self.health_actor = HealthActor(initial_memory=HealthMemory())
+        self.message_actor = MessageActor(initial_memory=MessageMemory())
+        self.order_actor = OrderActor(initial_memory=MessageMemory())
 
     async def _on_receive(self, query_dto: QueryDTO):
         messages = []
@@ -136,7 +141,8 @@ class AssistantActor(Actor):
             "Health": self.handle_health,
             "Communication": self.handle_communication,
             "GenericQuery": self.handle_generic_query,
-            "FollowUp": self.handle_generic_query
+            "FollowUp": self.handle_generic_query,
+            "Order": self.handle_order
         }
         handler = handlers.get(planner_state.type)
         if handler:
@@ -166,12 +172,14 @@ class AssistantActor(Actor):
         else:
             return await self.handle_continue_conversation(planner_state, query_dto)
         
-    async def handle_continue_conversation(self, planner_state: PlannerState, query_dto: QueryDTO):
+    async def handle_continue_conversation(self, planner_state: PlannerState, query_dto: QueryDTO, task_completed: str = None):
         messages = []
         if query_dto.session_dto.active_user.value == "dad":
             continue_conversation_prompt = assistant_prompt_senior + """
-            You just completed a task. Continue the conversation with the user.
+            You just completed a task : {task_completed}.
+              Continue the conversation with the user Maybe ask them about their Blood test results if you havem't asked before.
             """
+            continue_conversation_prompt = continue_conversation_prompt.format(task_completed=task_completed, timestamp=datetime.now().isoformat())
         elif query_dto.session_dto.active_user.value == "son":
             continue_conversation_prompt = assistant_prompt_son + """
             You just completed a task. Continue the conversation with the user.
@@ -205,6 +213,9 @@ class AssistantActor(Actor):
         Important Events: PM Visit today, Metro inauguration
         Weather: Sunny, 32°C
         Traffic Updates: Expect congestion in T Nagar (11:00-11:30 AM)
+        India England T20 match today, India won by two wickets, India now leads the series 2-0
+        score : England 165/9 in 20 overs, India 166/8 in 19.2 overs
+        Tilak Verma was player of the match scoring 72 in 55 balls
         """
         
         messages.append(SystemMessage(content=news_prompt))
@@ -215,29 +226,21 @@ class AssistantActor(Actor):
 
     async def handle_health(self, planner_state: PlannerState, query_dto: QueryDTO):
         response = await self.health_actor.ask(query_dto)
-        return ResponseDTO(response=response, artifact_url="", artifact_type="")
+        if response:
+            return ResponseDTO(response=response, artifact_url="", artifact_type="")
+        else:
+            return await self.handle_continue_conversation(planner_state, query_dto)
 
     async def handle_communication(self, planner_state: PlannerState, query_dto: QueryDTO):
-        messages = []
-        communication_prompt = """
-        You are Vaani's communication assistant. Follow these guidelines:
-        1. Handle calls, messages, and updates to family members
-        2. Always confirm message content before sending
-        3. Track missed calls and important messages
-        4. Maintain conversation context with family members
-        5. Handle birthday reminders and special occasions
+        response = await self.message_actor.ask(query_dto)
+        if response:
+            return ResponseDTO(response=response, artifact_url="", artifact_type="")
+        else:
+            return await self.handle_continue_conversation(planner_state, query_dto)
         
-        Current Communication Context:
-        Missed Calls: 2 calls from Rahul (son) this morning
-        Family Updates: Rohit planning to visit today
-        Upcoming Events: Nirvi's 4th birthday tomorrow
-        Family Contacts:
-        - Rahul (son): +91 98765-43210
-        - Rohit (nephew): +91 98765-43211
-        """
-        
-        messages.append(SystemMessage(content=communication_prompt))
-        messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
-        messages.append(HumanMessage(content=query_dto.message))
-        response = await self.chat_llm.ainvoke(messages)
-        return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
+    async def handle_order(self, planner_state: PlannerState, query_dto: QueryDTO):
+        response = await self.order_actor.ask(query_dto)
+        if response:
+            return ResponseDTO(response=response, artifact_url="", artifact_type="")
+        else:
+            return await self.handle_continue_conversation(planner_state, query_dto)

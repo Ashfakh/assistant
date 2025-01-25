@@ -37,7 +37,7 @@ class AudioService:
         response = await loop.run_in_executor(
             None,
             lambda: requests.post(
-                f"{self.base_url}/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+                f"{self.base_url}/text-to-speech/C2RGMrNBTZaNfddRPeRH",
                 headers=headers,
                 json=data
             )
@@ -46,4 +46,41 @@ class AudioService:
         if response.status_code == 200:
             return response.content
         else:
-            raise Exception(f"ElevenLabs API error: {response.text}") 
+            raise Exception(f"ElevenLabs API error: {response.text}")
+
+    async def text_to_speech_sarvam(self, text: str, target_language_code: str = "hi-IN") -> bytes:
+        headers = {
+            "Content-Type": "application/json",
+            "api-subscription-key": settings.SARVAM_API_KEY
+        }
+        
+        data = {
+            "inputs": [text],
+            "target_language_code": target_language_code,
+            "speaker": "meera",
+            "pitch": 0,
+            "pace": 1.65,
+            "loudness": 1.5,
+            "speech_sample_rate": 8000,
+            "enable_preprocessing": False,
+            "model": "bulbul:v1",
+            "eng_interpolation_wt": 123,
+            "override_triplets": {}
+        }
+
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: requests.post(
+                "https://api.sarvam.ai/text-to-speech",
+                headers=headers,
+                json=data
+            )
+        )
+        
+        if response.status_code == 200:
+            response_data = response.json()
+            # The API returns a list of audio strings, we'll take the first one
+            return response_data["audios"][0].encode()
+        else:
+            raise Exception(f"Sarvam.ai API error: {response.text}") 

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import List, Optional
 import pytz
@@ -11,6 +12,7 @@ from app.services.chat_service import ChatService
 from app.services.llm_factory import LLMFactory, LLMProvider
 from langchain.schema import HumanMessage, SystemMessage
 import structlog
+from django.core.mail import EmailMessage
 
 logger = structlog.get_logger(__name__)
 
@@ -20,6 +22,7 @@ health_prompt = """
         If you think the user is asking for exercise, you need to set the activity to exercise.
         If you need clarity on what the user is asking, you need to ask the user for it by setting the message to your question.
         Do not set the activity to medicine or exercise if you are not sure.
+        If you think there is a major health condition set alert to true and craft a message to the user's son highlighting the condition and the need to consult a doctor.
 
         Current Time: {timestamp}
 """
@@ -78,6 +81,8 @@ Current Time: {timestamp}
 
 class HealthState(BaseModel):
     activity: Optional[str] = None
+    alert: Optional[bool] = None
+    alert_message: Optional[str] = None
     message: Optional[str] = None
 
 class ExerciseScript(BaseModel):
@@ -117,15 +122,19 @@ class HealthActor(Actor):
 
     async def _on_receive(self, query_dto: QueryDTO):   
         logger.info("Received query", message=query_dto.message)
+        logger.info("Session DTO", current_activity=self.memory.current_activity)
         if not self.memory.current_activity:
             logger.debug("No current activity, determining activity type")
             messages = []
             ist_time = datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
             messages.append(SystemMessage(content=health_prompt.format(user_type=query_dto.session_dto.active_user, timestamp=ist_time)))
-            messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
+            messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history, count=2))
             messages.append(HumanMessage(content=query_dto.message))
             health_state = await self.health_llm.ainvoke(messages)
             logger.info("Determined health state", activity=health_state.activity, message=health_state.message)
+            if health_state.alert and not self.memory.alert:
+                self.memory.alert = True
+                asyncio.create_task(self.handle_alert(health_state.alert_message))
             if health_state.message:
                 return health_state.message
             if health_state.activity:
@@ -142,7 +151,6 @@ class HealthActor(Actor):
         messages.append(SystemMessage(content=medicine_prompt.format(timestamp=ist_time)))
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
-        print(messages)
         response = await self.chat_llm.ainvoke(messages)
         logger.info("Generated medicine response", response=response)
         return response.content
@@ -197,3 +205,19 @@ class HealthActor(Actor):
     def construct_exercise_script(self, exercise_script: List[str]):
         logger.debug("Constructing exercise script", script_length=len(exercise_script))
         return "\n".join(exercise_script)
+    
+    async def handle_alert(self, alert_message: str):
+        logger.info("Sending health alert email", alert_message=alert_message)
+        email = EmailMessage(
+            subject='Health Alert - Immediate Attention Required',
+            body=alert_message,
+            from_email='no-reply@getbreakout.ai',
+            to=['surya.sureshiitm@gmail.com','ashfakhrithu@gmail.com'],
+        )
+        try:
+            email.send(fail_silently=False)
+            logger.info("Health alert email sent successfully")
+            return "Alert has been sent to your emergency contact."
+        except Exception as e:
+            logger.error("Failed to send health alert email", error=str(e))
+            return "Unable to send alert email. Please contact emergency services if needed."
