@@ -42,3 +42,5 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Add this setting
 AUTH_USER_MODEL = 'auth.User'
+
+ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY")

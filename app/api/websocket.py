@@ -19,7 +19,11 @@ class WebSocketManager:
         print("New WebSocket connection attempt")
         await websocket.accept()
         if not self.session_dto:
-            self.session_dto = SessionDTO(id=session_id, active_user=UserType(role), language=language)
+            self.session_dto = SessionDTO(
+                id=session_id, 
+                active_user=UserType.DAD,  # or UserType.SON depending on your needs
+                language=language
+            )
         print(f"WebSocket connected: {session_id}")
         self.coordinator_actor = CoordinatorActor(initial_memory=CoordinatorMemory(active_actor="assistant"))
 
