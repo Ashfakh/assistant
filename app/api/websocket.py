@@ -3,7 +3,7 @@ import uuid
 import json
 from app.actor.coordinator_actor import CoordinatorActor
 from app.dto.coordinator import CoordinatorMemory
-from app.dto.session import QueryDTO, SessionDTO, UserType
+from app.dto.session import QueryDTO, ResponseDTO, SessionDTO, UserType
 from app.services.transcription_service import TranscriptionService
 from app.services.chat_service import ChatService
 from app.services.audio_service import AudioService
@@ -101,19 +101,20 @@ class WebSocketManager:
         try:
             # Get chat response
             print(f"Getting chat response for: {message}")
-            response = await self.coordinator_actor.ask(QueryDTO(message=message, session_dto=self.session_dto))
+            response: ResponseDTO = await self.coordinator_actor.ask(QueryDTO(message=message, session_dto=self.session_dto))
             print(f"Chat response received: {response}")
 
             if response_type == "audio":
                 # Convert response to speech
                 print("Converting to speech...")
-                audio_response = await self.audio_service.text_to_speech(response)
+                audio_response = await self.audio_service.text_to_speech(response.response)
                 print(f"Audio response generated: {len(audio_response)} bytes")
                 await websocket.send_bytes(audio_response)
+                await websocket.send_text(json.dumps({"response": response.response, "artifact_url": response.artifact_url, "artifact_type": response.artifact_type}))
             else:
                 # Send text response
                 print("Sending text response...")
-                await websocket.send_text(json.dumps({"response": response}))
+                await websocket.send_text(json.dumps({"response": response.response, "artifact_url": response.artifact_url, "artifact_type": response.artifact_type}))
             
             print("Response sent to client")
 

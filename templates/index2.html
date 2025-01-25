@@ -31,22 +31,15 @@
             align-items: center;
             justify-content: center;
             gap: 30px;
-            /* Increased gap between bars */
             height: 50vh;
-            /* Takes up half the viewport height */
             margin: auto 0;
-            /* Centers vertically */
         }
 
         .wave-bar {
             width: 30px;
-            /* Doubled width from 15px */
             height: 160px;
-            /* Quadrupled height from 40px */
             background: #FF69B4;
-            /* Changed to hot pink */
             border-radius: 8px;
-            /* Slightly increased radius to match new size */
             animation: none;
         }
 
@@ -67,6 +60,32 @@
         .bar {
             display: none;
         }
+
+        #startButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #FF69B4;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-top: -20px;
+            transition: background-color 0.3s ease;
+            width: 150px;
+            position: relative;
+            z-index: 2;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #startButton:hover {
+            background-color: #FF1493;
+        }
+
+        #startButton:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 
@@ -78,11 +97,13 @@
         <div class="wave-bar"></div>
         <div class="wave-bar"></div>
     </div>
+    <button id="startButton">Start Listening</button>
     <div id="transcript"></div>
 
     <script>
         let ws;
         let recognition;
+        let isConnected = false;
 
         function connectWebSocket() {
             // Generate a random session ID if not already stored
@@ -106,8 +127,11 @@
 
             ws.onclose = () => {
                 document.getElementById('status').textContent = 'Status: Disconnected';
-                console.log('WebSocket disconnected, attempting to reconnect...');
-                setTimeout(connectWebSocket, 3000);
+                console.log('WebSocket disconnected');
+                isConnected = false;
+                const startButton = document.getElementById('startButton');
+                startButton.disabled = false;
+                startButton.textContent = 'Start Listening';
             };
 
             ws.onmessage = async (event) => {
@@ -351,14 +375,21 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Make sure status element exists before attempting connection
-            const status = document.getElementById('status');
-            if (status) {
+        document.getElementById('startButton').addEventListener('click', function () {
+            if (!isConnected) {
+                this.disabled = true;
                 connectWebSocket();
                 initSpeechRecognition();
                 startListening();
-            } else {
+                this.textContent = 'Listening...';
+                isConnected = true;
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Only initialize the status element
+            const status = document.getElementById('status');
+            if (!status) {
                 console.error('Status element not found');
             }
         });

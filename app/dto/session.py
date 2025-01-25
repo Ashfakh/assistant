@@ -18,3 +18,9 @@ class SessionDTO:
 class QueryDTO:
     message: str
     session_dto: SessionDTO
+
+@dataclass
+class ResponseDTO:
+    response: str
+    artifact_url: str
+    artifact_type: str

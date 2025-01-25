@@ -8,7 +8,7 @@ from app.actor.entertainment_actor import EntertainmentActor
 from app.dto.assistant import AssistantMemory
 from app.dto.entertainment import EntertainmentMemory
 from app.dto.scheduler import SchedulerMemory
-from app.dto.session import QueryDTO
+from app.dto.session import QueryDTO, ResponseDTO
 from app.services.chat_service import ChatService
 from app.services.llm_factory import LLMFactory, LLMProvider
 from langchain.schema import HumanMessage, SystemMessage
@@ -153,12 +153,12 @@ class AssistantActor(Actor):
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
         response = await self.chat_llm.ainvoke(messages)
-        return response.content
+        return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
     
     async def handle_scheduler(self, planner_state: PlannerState, query_dto: QueryDTO):
         response = await self.scheduler_actor.ask(query_dto)
         if response:
-            return response
+            return ResponseDTO(response=response, artifact_url="", artifact_type="")
         else:
             return await self.handle_continue_conversation(planner_state, query_dto)
         
@@ -177,29 +177,9 @@ class AssistantActor(Actor):
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
         response = await self.chat_llm.ainvoke(messages)
-        return response.content
+        return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
 
     async def handle_entertainment(self, planner_state: PlannerState, query_dto: QueryDTO):
-        # messages = []
-        # entertainment_prompt = """
-        # You are Vaani's entertainment assistant. Follow these guidelines:
-        # 1. Offer specific movie/show options rather than open-ended choices
-        # 2. Remember user preferences and viewing history
-        # 3. Handle playback controls (volume, subtitles, pause/play)
-        # 4. Suggest movies based on user's language preference
-        # 5. For older movies, mention the year and main actors
-        
-        # Current Entertainment Context:
-        # Language Preference: Hindi
-        # Favorite Genres: Classic Bollywood, Family Drama
-        # Recent Interest: Amitabh Bachchan movies
-        # Popular Options: Sholay (1975), Deewar (1975), Zanjeer (1973)
-        # """
-        
-        # messages.append(SystemMessage(content=entertainment_prompt))
-        # messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
-        # messages.append(HumanMessage(content=query_dto.message))
-        # response = await self.chat_llm.ainvoke(messages)
         return await self.entertainment_actor.ask(query_dto)
 
     async def handle_news(self, planner_state: PlannerState, query_dto: QueryDTO):
@@ -223,7 +203,7 @@ class AssistantActor(Actor):
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
         response = await self.chat_llm.ainvoke(messages)
-        return response.content
+        return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
 
     async def handle_health(self, planner_state: PlannerState, query_dto: QueryDTO):
         messages = []
@@ -254,7 +234,7 @@ class AssistantActor(Actor):
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
         response = await self.chat_llm.ainvoke(messages)
-        return response.content
+        return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
 
     async def handle_communication(self, planner_state: PlannerState, query_dto: QueryDTO):
         messages = []
@@ -279,4 +259,4 @@ class AssistantActor(Actor):
         messages.extend(self.chat_service.create_messages(query_dto.session_dto.chat_history))
         messages.append(HumanMessage(content=query_dto.message))
         response = await self.chat_llm.ainvoke(messages)
-        return response.content
+        return ResponseDTO(response=response.content, artifact_url="", artifact_type="")
